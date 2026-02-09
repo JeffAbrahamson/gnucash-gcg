@@ -19,8 +19,8 @@ from sqlalchemy.exc import SAWarning
 
 warnings.filterwarnings("ignore", category=SAWarning)
 
-from piecash import open_book
-from piecash.core.book import Book
+from piecash import open_book  # noqa: E402
+from piecash.core.book import Book  # noqa: E402
 
 
 class BookOpenError(Exception):

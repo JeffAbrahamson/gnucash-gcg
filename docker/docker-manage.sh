@@ -57,7 +57,8 @@ case "$action" in
     test)
         # Run test suite in ephemeral container
         maybe_build_nocache dev-sh
-        docker compose run --rm --build dev-sh pytest
+        docker compose run --rm --build dev-sh \
+            bash -c 'flake8 . && black --check --line-length 79 . && pytest'
         ;;
 
     *)
