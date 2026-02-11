@@ -900,7 +900,10 @@ def cmd_doctor(args, config: Config) -> int:
     print("Environment:")
     import os
 
-    print(f"  GCG_BOOK: {os.environ.get('GCG_BOOK', '(not set)')}")
+    print(
+        f"  GCG_DEFAULT_BOOK_PATH: "
+        f"{os.environ.get('GCG_DEFAULT_BOOK_PATH', '(not set)')}"
+    )
 
     return 0
 

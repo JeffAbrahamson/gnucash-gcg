@@ -9,7 +9,7 @@ SPEC.md and README reference `GCG_BOOK`, but `config.py:89` uses
 `GCG_DEFAULT_BOOK_PATH`. Anyone following the docs sets the wrong env var.
 
 Action: Favour GCG_DEFAULT_BOOK_PATH, drop GCG_BOOK.
-Status: Pending
+Status: Done
 
 ### Fix book path resolution order to match spec
 Three documents give three different priority orders. The spec says

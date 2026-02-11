@@ -50,7 +50,7 @@ The `gcg/` package has a clear layered structure:
 
 - **cli.py** — Entry point (`main()`), argument parsing via `create_parser()`, command dispatch. All subcommands (accounts, grep, ledger, tx, split, doctor, cache) are handled here.
 - **book.py** — GnuCash book access layer. Opens SQLite in read-only mode via piecash. Provides `open_gnucash_book()` context manager, notes detection (`check_notes_support()`), and direct SQL queries.
-- **config.py** — `Config` dataclass and `load_config()`. Resolution order: `--book` CLI arg > `GCG_BOOK` env var > `~/.config/gcg/config.toml` > hardcoded default.
+- **config.py** — `Config` dataclass and `load_config()`. Resolution order: `--book` CLI arg > `GCG_DEFAULT_BOOK_PATH` env var > `~/.config/gcg/config.toml` > hardcoded default.
 - **output.py** — Dataclasses (`SplitRow`, `TransactionRow`, `AccountRow`) and `OutputFormatter` for table/CSV/JSON rendering. Uses `tabulate` for tables.
 - **currency.py** — `CurrencyConverter` class. Handles display modes (auto/base/split/account), price lookups from GnuCash price DB, rate caching with configurable lookback window.
 - **cache.py** — `CacheManager` for an optional sidecar SQLite cache. Denormalizes split+tx+account data with FTS5 for fast text search. Stored at `~/.cache/gcg/cache.sqlite`.

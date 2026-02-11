@@ -3,7 +3,7 @@ Configuration management for gcg.
 
 Handles loading configuration from multiple sources with precedence:
 1. Command-line arguments (highest)
-2. Environment variables (GCG_BOOK, etc.)
+2. Environment variables (GCG_DEFAULT_BOOK_PATH)
 3. XDG config file (~/.config/gcg/config.toml)
 4. Built-in defaults (lowest)
 """

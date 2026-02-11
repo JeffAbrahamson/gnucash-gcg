@@ -350,10 +350,10 @@ python gcg/cli.py --help
 
 ### Testing with a Real GnuCash Book
 
-Set the `GCG_BOOK` environment variable to point to your GnuCash file:
+Set the `GCG_DEFAULT_BOOK_PATH` environment variable to point to your GnuCash file:
 
 ```bash
-export GCG_BOOK=~/path/to/your/book.gnucash
+export GCG_DEFAULT_BOOK_PATH=~/path/to/your/book.gnucash
 gcg doctor  # Verify it can open the book
 gcg accounts ""  # List all accounts
 ```
