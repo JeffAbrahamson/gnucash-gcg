@@ -1,6 +1,7 @@
 """Tests for CLI argument parsing and date/amount range handling."""
 
 import argparse
+import json
 from datetime import date
 from decimal import Decimal
 
@@ -8,6 +9,8 @@ import pytest
 
 # Skip all tests if piecash is not available (required by gcg.cli)
 pytest.importorskip("piecash")
+
+from gcg.cli import main  # noqa: E402
 
 
 class TestDateParsing:
@@ -308,3 +311,369 @@ class TestParserCreation:
         assert args.command == "cache"
         assert args.action == "build"
         assert args.force is True
+
+
+# ===================================================================
+# CLI command integration tests via main()
+# ===================================================================
+
+
+def _book(test_book_path):
+    return ["--book", str(test_book_path)]
+
+
+class TestMainNoCommand:
+    def test_no_args_shows_help(self, capsys):
+        rc = main([])
+        assert rc == 0
+
+
+class TestMainAccounts:
+    def test_accounts_all(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["accounts"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Bank" in out
+
+    def test_accounts_pattern(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["accounts", "Checking"])
+        assert rc == 0
+        assert "Checking" in capsys.readouterr().out
+
+    def test_accounts_no_match(self, test_book_path):
+        rc = main(_book(test_book_path) + ["accounts", "ZZZNOTEXIST"])
+        assert rc == 1
+
+    def test_accounts_regex(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["accounts", "Check.*", "--regex"])
+        assert rc == 0
+        assert "Checking" in capsys.readouterr().out
+
+    def test_accounts_invalid_regex(self, test_book_path):
+        rc = main(_book(test_book_path) + ["accounts", "[bad", "--regex"])
+        assert rc == 2
+
+    def test_accounts_json(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["--format", "json", "accounts"])
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) > 0
+
+    def test_accounts_csv(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["--format", "csv", "accounts"])
+        assert rc == 0
+
+    def test_accounts_tree(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["accounts", "--tree", "--max-depth", "1"]
+        )
+        assert rc == 0
+
+    def test_accounts_show_guids(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["accounts", "--show-guids"])
+        assert rc == 0
+
+    def test_accounts_limit_offset(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "--limit",
+                "2",
+                "--offset",
+                "1",
+                "accounts",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) == 2
+
+    def test_accounts_bad_book(self, tmp_path):
+        rc = main(["--book", str(tmp_path / "nope.gnucash"), "accounts"])
+        assert rc == 2
+
+
+class TestMainGrep:
+    def test_grep_basic(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["grep", "Tesco"])
+        assert rc == 0
+        assert "Tesco" in capsys.readouterr().out
+
+    def test_grep_no_match(self, test_book_path):
+        rc = main(_book(test_book_path) + ["grep", "ZZZNOTEXIST"])
+        assert rc == 1
+
+    def test_grep_regex(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["grep", "Tes.o", "--regex"])
+        assert rc == 0
+
+    def test_grep_invalid_regex(self, test_book_path):
+        rc = main(_book(test_book_path) + ["grep", "[bad", "--regex"])
+        assert rc == 2
+
+    def test_grep_json(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["--format", "json", "grep", "Tesco"]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) > 0
+
+    def test_grep_with_account(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["grep", "Tesco", "--account", "Groceries"]
+        )
+        assert rc == 0
+
+    def test_grep_with_dates(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + [
+                "grep",
+                "Tesco",
+                "--after",
+                "2026-01-01",
+                "--before",
+                "2026-02-01",
+            ]
+        )
+        assert rc == 0
+
+    def test_grep_with_amount(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["grep", "Tesco", "--amount", "40..50"]
+        )
+        assert rc == 0
+
+    def test_grep_full_tx(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["grep", "Tesco", "--full-tx"])
+        assert rc == 0
+        assert "Tesco" in capsys.readouterr().out
+
+    def test_grep_limit_offset(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "--limit",
+                "1",
+                "--offset",
+                "0",
+                "grep",
+                "Tesco",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) == 1
+
+    def test_grep_sort_reverse(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + ["--sort", "amount", "--reverse", "grep", ""]
+        )
+        assert rc == 0
+
+    def test_grep_bad_book(self, tmp_path):
+        rc = main(["--book", str(tmp_path / "nope.gnucash"), "grep", "x"])
+        assert rc == 2
+
+    def test_grep_dedupe_tx(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["grep", "Tesco", "--dedupe", "tx"])
+        assert rc == 0
+
+
+class TestMainLedger:
+    def test_ledger_basic(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["ledger", "Checking"])
+        assert rc == 0
+        assert len(capsys.readouterr().out.strip()) > 0
+
+    def test_ledger_no_match(self, test_book_path):
+        rc = main(_book(test_book_path) + ["ledger", "ZZZNOTEXIST"])
+        assert rc == 1
+
+    def test_ledger_with_dates(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + [
+                "ledger",
+                "Checking",
+                "--after",
+                "2026-01-01",
+                "--before",
+                "2026-02-01",
+            ]
+        )
+        assert rc == 0
+
+    def test_ledger_with_amount(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["ledger", "Checking", "--amount", "100.."]
+        )
+        assert rc == 0
+
+    def test_ledger_no_splits(self, test_book_path):
+        rc = main(
+            _book(test_book_path)
+            + ["ledger", "Checking", "--after", "2099-01-01"]
+        )
+        assert rc == 1
+
+    def test_ledger_json(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["--format", "json", "ledger", "Checking"]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) > 0
+
+    def test_ledger_limit_offset(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "--limit",
+                "1",
+                "--offset",
+                "1",
+                "ledger",
+                "Checking",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) == 1
+
+    def test_ledger_invalid_regex(self, test_book_path):
+        rc = main(
+            _book(test_book_path) + ["ledger", "[bad", "--account-regex"]
+        )
+        assert rc == 2
+
+    def test_ledger_bad_book(self, tmp_path):
+        rc = main(
+            [
+                "--book",
+                str(tmp_path / "nope.gnucash"),
+                "ledger",
+                "X",
+            ]
+        )
+        assert rc == 2
+
+
+class TestMainTx:
+    def test_tx_not_found(self, test_book_path):
+        rc = main(_book(test_book_path) + ["tx", "nonexistent-guid"])
+        assert rc == 1
+
+    def test_tx_found(self, test_book_path, capsys):
+        """Look up a real GUID from the book."""
+        from gcg.book import open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            guid = list(book.transactions)[0].guid
+        rc = main(_book(test_book_path) + ["tx", guid])
+        assert rc == 0
+        assert len(capsys.readouterr().out.strip()) > 0
+
+    def test_tx_bad_book(self, tmp_path):
+        rc = main(
+            [
+                "--book",
+                str(tmp_path / "nope.gnucash"),
+                "tx",
+                "abc",
+            ]
+        )
+        assert rc == 2
+
+
+class TestMainSplit:
+    def test_split_not_found(self, test_book_path):
+        rc = main(_book(test_book_path) + ["split", "nonexistent-guid"])
+        assert rc == 1
+
+    def test_split_found(self, test_book_path, capsys):
+        from gcg.book import open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            for acc in book.accounts:
+                if acc.splits:
+                    guid = acc.splits[0].guid
+                    break
+        rc = main(_book(test_book_path) + ["split", guid])
+        assert rc == 0
+        assert len(capsys.readouterr().out.strip()) > 0
+
+    def test_split_bad_book(self, tmp_path):
+        rc = main(
+            [
+                "--book",
+                str(tmp_path / "nope.gnucash"),
+                "split",
+                "abc",
+            ]
+        )
+        assert rc == 2
+
+
+class TestMainDoctor:
+    def test_doctor(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["doctor"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "diagnostic" in out.lower()
+
+
+class TestMainCache:
+    def test_cache_status(self, test_book_path, capsys):
+        rc = main(_book(test_book_path) + ["cache", "status"])
+        assert rc == 0
+        assert "Cache" in capsys.readouterr().out
+
+    def test_cache_build_and_drop(self, test_book_path, tmp_path, capsys):
+        cache_file = tmp_path / "test_cache.sqlite"
+        # Patch cache_path via env or use config; simplest is to test
+        # via the cmd_cache function directly
+        from gcg.cli import cmd_cache
+        from gcg.config import Config
+
+        config = Config(book_path=test_book_path, cache_path=cache_file)
+
+        class Args:
+            action = "build"
+            force = False
+
+        rc = cmd_cache(Args(), config)
+        assert rc == 0
+        assert cache_file.exists()
+        capsys.readouterr()
+
+        # Drop
+        Args.action = "drop"
+        rc = cmd_cache(Args(), config)
+        assert rc == 0
+        assert not cache_file.exists()
+
+    def test_cache_drop_no_cache(self, test_book_path, tmp_path, capsys):
+        from gcg.cli import cmd_cache
+        from gcg.config import Config
+
+        config = Config(
+            book_path=test_book_path,
+            cache_path=tmp_path / "nonexistent.sqlite",
+        )
+
+        class Args:
+            action = "drop"
+            force = False
+
+        rc = cmd_cache(Args(), config)
+        assert rc == 0
+        assert "No cache to drop" in capsys.readouterr().out
