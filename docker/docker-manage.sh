@@ -58,7 +58,7 @@ case "$action" in
         # Run test suite in ephemeral container
         maybe_build_nocache dev-sh
         docker compose run --rm --build dev-sh \
-            bash -c 'flake8 . && black --check --line-length 79 . && pytest'
+            bash -c 'flake8 . && black --check --line-length 79 . && pytest --cov=gcg --cov-report=term-missing --cov-fail-under=80'
         ;;
 
     *)
