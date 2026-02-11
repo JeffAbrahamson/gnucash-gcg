@@ -161,6 +161,11 @@ def load_config(
         if "path" in cache_config:
             config.cache_path = Path(cache_config["path"])
 
+    # Apply env var (overrides config file, but CLI overrides env var)
+    env_book = os.environ.get("GCG_DEFAULT_BOOK_PATH")
+    if env_book:
+        config.book_path = Path(env_book)
+
     # Apply CLI overrides (highest precedence)
     if book_path is not None:
         config.book_path = Path(book_path)

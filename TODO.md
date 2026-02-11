@@ -18,7 +18,7 @@ Three documents give three different priority orders. The spec says
 entirely). Reconcile code, SPEC.md, and README to a single agreed order.
 
 Action: Pick whichever order is most logical, then reconcile code, spec and readme
-Status: Pending
+Status: Done — adopted SPEC order: --book > env var > config file > default
 
 ### Fix `--full-tx` ignoring `--sort`/`--limit`/`--offset`
 In `cmd_grep` (cli.py:625-650), sort/limit/offset are applied to the flat

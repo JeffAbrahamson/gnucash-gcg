@@ -165,8 +165,8 @@ These options are available for `grep` and `ledger` commands:
 The book path is resolved in order:
 
 1. `--book PATH` command-line argument
-2. Config file: `~/.config/gcg/config.toml`
-3. `GCG_DEFAULT_BOOK_PATH` environment variable
+2. `GCG_DEFAULT_BOOK_PATH` environment variable
+3. Config file: `~/.config/gcg/config.toml`
 
 If no book path is configured, gcg will report an error.
 

@@ -3,11 +3,11 @@
 from pathlib import Path
 
 from gcg.config import (
-    Config,
     DEFAULT_BASE_CURRENCY,
     DEFAULT_FX_LOOKBACK_DAYS,
-    get_xdg_config_home,
+    Config,
     get_xdg_cache_home,
+    get_xdg_config_home,
     get_xdg_state_home,
     load_config,
     load_config_file,
@@ -183,6 +183,7 @@ class TestLoadConfigFromFile:
     """Test that load_config picks up values from a TOML file."""
 
     def test_full_config_from_file(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("GCG_DEFAULT_BOOK_PATH", raising=False)
         config_dir = tmp_path / "gcg"
         config_dir.mkdir()
         config_file = config_dir / "config.toml"
@@ -213,6 +214,28 @@ class TestLoadConfigFromFile:
         assert config.cache_enabled is False
         assert config.cache_path == Path("/tmp/my_cache.sqlite")
 
+    def test_env_overrides_file(self, monkeypatch, tmp_path):
+        """Env var should override config file book path."""
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text('book = "/file/book.gnucash"\n')
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("GCG_DEFAULT_BOOK_PATH", "/env/book.gnucash")
+        config = load_config()
+        assert config.book_path == Path("/env/book.gnucash")
+
+    def test_cli_overrides_env_and_file(self, monkeypatch, tmp_path):
+        """CLI should override both env var and config file."""
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text('book = "/file/book.gnucash"\n')
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("GCG_DEFAULT_BOOK_PATH", "/env/book.gnucash")
+        config = load_config(book_path="/cli/book.gnucash")
+        assert config.book_path == Path("/cli/book.gnucash")
+
     def test_cli_overrides_file(self, monkeypatch, tmp_path):
         config_dir = tmp_path / "gcg"
         config_dir.mkdir()
@@ -221,6 +244,7 @@ class TestLoadConfigFromFile:
             'book = "/file/book.gnucash"\n' '[currency]\nbase = "GBP"\n'
         )
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.delenv("GCG_DEFAULT_BOOK_PATH", raising=False)
         config = load_config(
             book_path="/cli/book.gnucash",
             base_currency="JPY",
