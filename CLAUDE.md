@@ -8,31 +8,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Development Commands
 
+**Note:** This environment uses `python3` (not `python`).
+
 ```bash
 # Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+python3 -m pip install -e ".[dev]"
 
 # Run all tests
-pytest
+python3 -m pytest
 
 # Run a specific test file
-pytest tests/test_cli.py
+python3 -m pytest tests/test_cli.py
 
 # Run a single test by name
-pytest tests/test_cli.py -k "test_name"
+python3 -m pytest tests/test_cli.py -k "test_name"
 
 # Run with coverage
-pytest --cov=gcg --cov-report=term-missing
+python3 -m pytest --cov=gcg --cov-report=term-missing
 
 # Check formatting (must pass CI)
-black --check --verbose --line-length 79 .
-flake8 .
+python3 -m black --check --verbose --line-length 79 .
+python3 -m flake8 .
 
 # Auto-format
-black --line-length 79 gcg/ tests/
+python3 -m black --line-length 79 gcg/ tests/
 
 # Run the tool directly during development
-python -m gcg --help
+python3 -m gcg --help
 ```
 
 ## Code Style
