@@ -187,7 +187,7 @@ cli.py uses `getattr(args, "full_account", False)` and
 parent parser or add defaults to each subparser.
 
 Action: Analyse the right solution and fix.  Make sure you document in the git commit why ou've chosen the solution you have.
-Status: Pending
+Status: Done
 
 ### Move `import os` to top of cli.py
 cli.py:901 imports `os` inside `cmd_doctor`; the rest of the codebase

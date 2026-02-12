@@ -144,6 +144,24 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show full account paths (default: short names)",
     )
 
+    # Set defaults for subparser-specific attributes so that
+    # commands can use args.X directly instead of getattr/hasattr.
+    parser.set_defaults(
+        no_subtree=False,
+        after=None,
+        before=None,
+        date=None,
+        base_currency=None,
+        fx_lookback=None,
+        also_original=False,
+        currency="auto",
+        signed=False,
+        context="full",
+        full_tx=False,
+        regex=False,
+        case_sensitive=False,
+    )
+
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
     # accounts command
@@ -359,9 +377,9 @@ def resolve_date_filters(args) -> tuple[Optional[date], Optional[date]]:
     --after is inclusive, --before is exclusive.
     --date A..B is inclusive on both ends (converted to after/before).
     """
-    after_date = getattr(args, "after", None)
-    before_date = getattr(args, "before", None)
-    date_range = getattr(args, "date", None)
+    after_date = args.after
+    before_date = args.before
+    date_range = args.date
 
     if date_range:
         range_start, range_end = date_range
@@ -424,11 +442,7 @@ def cmd_accounts(args, config: Config) -> int:
                     args.pattern,
                     is_regex=args.regex,
                     case_sensitive=args.case_sensitive,
-                    include_subtree=(
-                        not args.no_subtree
-                        if hasattr(args, "no_subtree")
-                        else True
-                    ),
+                    include_subtree=not args.no_subtree,
                 )
             except InvalidPatternError as e:
                 print(f"Error: {e}", file=sys.stderr)
@@ -607,7 +621,7 @@ def cmd_grep(args, config: Config) -> int:
                 return 1  # No matches
 
             # Format output
-            full_account = getattr(args, "full_account", False)
+            full_account = args.full_account
             rows = _splits_to_rows(
                 matching_splits,
                 config,
@@ -715,7 +729,7 @@ def cmd_ledger(args, config: Config) -> int:
                 info.has_notes_column,
             )
 
-            full_account = getattr(args, "full_account", False)
+            full_account = args.full_account
             rows = _splits_to_rows(
                 splits_data,
                 config,
@@ -763,7 +777,7 @@ def cmd_tx(args, config: Config) -> int:
             )
 
             # Build split rows
-            full_account = getattr(args, "full_account", False)
+            full_account = args.full_account
             split_rows = []
             for split in tx.splits:
                 acc = split.account
@@ -832,7 +846,7 @@ def cmd_split(args, config: Config) -> int:
                 info.has_notes_column,
             )
 
-            full_account = getattr(args, "full_account", False)
+            full_account = args.full_account
             row = SplitRow(
                 date=found_tx.post_date,
                 description=found_tx.description,
@@ -951,15 +965,13 @@ def _splits_to_rows(
     rows = []
     converter = CurrencyConverter(
         config.resolve_book_path(),
-        base_currency=getattr(args, "base_currency", None)
-        or config.base_currency,
-        lookback_days=getattr(args, "fx_lookback", None)
-        or config.fx_lookback_days,
+        base_currency=args.base_currency or config.base_currency,
+        lookback_days=args.fx_lookback or config.fx_lookback_days,
     )
 
-    currency_mode = getattr(args, "currency", "auto")
-    also_original = getattr(args, "also_original", False)
-    signed = getattr(args, "signed", False)
+    currency_mode = args.currency
+    also_original = args.also_original
+    signed = args.signed
 
     # Determine target currency
     account_currencies = get_account_currencies(
@@ -1051,8 +1063,8 @@ def _splits_to_transactions(
     elif notes_map is None:
         notes_map = {}
 
-    context_mode = getattr(args, "context", "full")
-    signed = getattr(args, "signed", False)
+    context_mode = args.context
+    signed = args.signed
 
     # Group by transaction
     tx_map = {}
