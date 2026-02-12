@@ -56,7 +56,7 @@ Status: Pending
 Either use the cache in the read path or remove the unused method.
 
 Action: Drop the cache
-Status: Pending
+Status: Done — removed unused search() method
 
 ### Fix SQLite connection leaks
 In `book.py`, `check_notes_support`, `get_transaction_notes`, and
