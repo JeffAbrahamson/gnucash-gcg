@@ -155,7 +155,7 @@ Version is duplicated in `__init__.py` and `pyproject.toml`. Consider
 `setuptools-scm` or dynamic version reading to avoid drift.
 
 Action: Use setuptools-scm.  Document in PyPi.md how to use it (the git command to set the tag and the format to use) as part of the pip publishing process.
-Status: Pending
+Status: Done
 
 ## P6 — Minor / Low Priority
 

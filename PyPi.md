@@ -47,22 +47,25 @@ export TWINE_PASSWORD=pypi-your-api-token-here
 
 ## Version Bump
 
-Before releasing, update the version in two places:
+Version is derived automatically from git tags via `setuptools-scm`.
+To release a new version, create a git tag:
 
-1. `gcg/__init__.py`:
-   ```python
-   __version__ = "0.2.0"
-   ```
+```bash
+# Tag the release (use semantic versioning: vMAJOR.MINOR.PATCH)
+git tag v0.2.0
 
-2. `pyproject.toml`:
-   ```toml
-   version = "0.2.0"
-   ```
+# Or with an annotation
+git tag -a v0.2.0 -m "Release 0.2.0: description of changes"
+```
 
 Follow [Semantic Versioning](https://semver.org/):
 - MAJOR: Breaking changes
 - MINOR: New features (backward compatible)
 - PATCH: Bug fixes (backward compatible)
+
+Between tags, setuptools-scm generates dev versions like
+`0.1.0.dev31+g595c909` based on the commit distance from the
+last tag.
 
 ## Building
 
@@ -181,7 +184,7 @@ Add `PYPI_API_TOKEN` to repository secrets in GitHub.
 
 ## Checklist for Releases
 
-1. [ ] Update version in `gcg/__init__.py` and `pyproject.toml`
+1. [ ] Create git tag: `git tag v0.X.Y`
 2. [ ] Update CHANGELOG (if you have one)
 3. [ ] Ensure tests pass: `pytest`
 4. [ ] Ensure linting passes: `black --check` and `flake8`

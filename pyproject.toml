@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "gcg"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Grep-like search and reporting for GnuCash SQLite books"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -51,6 +51,9 @@ Homepage = "https://github.com/JeffAbrahamson/gnucash-gcg"
 Documentation = "https://github.com/JeffAbrahamson/gnucash-gcg#readme"
 Repository = "https://github.com/JeffAbrahamson/gnucash-gcg"
 Issues = "https://github.com/JeffAbrahamson/gnucash-gcg/issues"
+
+[tool.setuptools_scm]
+version_file = "gcg/_version.py"
 
 [tool.setuptools.packages.find]
 where = ["."]
