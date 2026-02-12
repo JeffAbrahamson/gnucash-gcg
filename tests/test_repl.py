@@ -691,3 +691,160 @@ class TestRunCommandWithBook:
         session_with_book.run_command(f"open {test_book_path}")
         out = capsys.readouterr().out
         assert "Opened:" in out
+
+    def test_dispatch_tx(self, session_with_book, capsys):
+        guid = list(session_with_book.book.transactions)[0].guid
+        session_with_book.run_command(f"tx {guid}")
+        out = capsys.readouterr().out
+        assert len(out.strip()) > 0
+
+    def test_dispatch_split(self, session_with_book, capsys):
+        for acc in session_with_book.book.accounts:
+            if acc.splits:
+                guid = acc.splits[0].guid
+                break
+        session_with_book.run_command(f"split {guid}")
+        out = capsys.readouterr().out
+        assert len(out.strip()) > 0
+
+    def test_open_no_path_uses_config(
+        self, test_book_path, tmp_history, capsys
+    ):
+        cfg = Config(book_path=test_book_path, history_path=tmp_history)
+        sess = ReplSession(cfg)
+        sess.run_command("open")
+        out = capsys.readouterr().out
+        assert "Opened:" in out
+        sess.close_book()
+
+
+# ===================================================================
+# Accounts: tree-prune, max-depth, offset
+# ===================================================================
+
+
+class TestAccountsExtended:
+    def test_accounts_tree_prune(self, session_with_book, capsys):
+        session_with_book.cmd_accounts(["Groceries", "--tree-prune"])
+        out = capsys.readouterr().out
+        assert "Expenses" in out or "Food" in out
+
+    def test_accounts_max_depth(self, session_with_book, capsys):
+        session_with_book.cmd_accounts(["--tree", "--max-depth", "0"])
+        out = capsys.readouterr().out
+        assert len(out.strip()) > 0
+
+    def test_accounts_offset(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_accounts(["--offset", "1", "--limit", "2"])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        assert len(data) == 2
+
+
+# ===================================================================
+# Grep: extended filter coverage
+# ===================================================================
+
+
+class TestGrepExtended:
+    def test_grep_account_filter(self, session_with_book, capsys):
+        session_with_book.cmd_grep(["Tesco", "--account", "Groceries"])
+        out = capsys.readouterr().out
+        assert "Tesco" in out
+
+    def test_grep_account_invalid_regex(self, session_with_book, capsys):
+        session_with_book.cmd_grep(
+            ["Tesco", "--account", "[bad", "--account-regex"]
+        )
+        err = capsys.readouterr().err
+        assert "Error" in err
+
+    def test_grep_amount_min(self, session_with_book, capsys):
+        session_with_book.cmd_grep(["Tesco", "--amount", "40.."])
+        out = capsys.readouterr().out
+        assert "Tesco" in out
+
+    def test_grep_amount_max(self, session_with_book, capsys):
+        session_with_book.cmd_grep(["Tesco", "--amount", "..50"])
+        out = capsys.readouterr().out
+        assert "Tesco" in out
+
+    def test_grep_offset(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_grep(["Tesco", "--offset", "0", "--limit", "1"])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        assert len(data) == 1
+
+    def test_grep_full_tx(self, session_with_book, capsys):
+        session_with_book.cmd_grep(["Tesco", "--full-tx"])
+        out = capsys.readouterr().out
+        assert "Tesco" in out
+
+    def test_grep_before_date(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_grep(["", "--regex", "--before", "2026-01-10"])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert row["date"] < "2026-01-10"
+
+
+# ===================================================================
+# Ledger: extended filter coverage
+# ===================================================================
+
+
+class TestLedgerExtended:
+    def test_ledger_before_date(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_ledger(["Checking", "--before", "2026-01-10"])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert row["date"] < "2026-01-10"
+
+    def test_ledger_amount_min(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_ledger(["Checking", "--amount", "100.."])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert Decimal(row["amount"]) >= 100
+
+    def test_ledger_amount_max(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_ledger(["Checking", "--amount", "..50"])
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert Decimal(row["amount"]) <= 50
+
+    def test_ledger_offset_limit(self, session_with_book, capsys):
+        session_with_book.output_format = "json"
+        session_with_book.cmd_ledger(
+            ["Checking", "--offset", "1", "--limit", "2"]
+        )
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        assert len(data) == 2
+
+    def test_ledger_invalid_regex(self, session_with_book, capsys):
+        session_with_book.cmd_ledger(["[bad", "--account-regex"])
+        err = capsys.readouterr().err
+        assert "Error" in err
