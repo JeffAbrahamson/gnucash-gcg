@@ -98,7 +98,7 @@ Status: Done
 coverage.
 
 Action: Fix by adding test coverage
-Status: Pending
+Status: Done
 
 ### Add currency conversion tests with price data
 `CurrencyConverter.get_price()` and `_lookup_price()` are untested,

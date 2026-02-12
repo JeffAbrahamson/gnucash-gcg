@@ -11,6 +11,7 @@ import pytest
 pytest.importorskip("piecash")
 
 from gcg.cli import main  # noqa: E402
+from gcg.output import SplitRow  # noqa: E402
 
 
 class TestDateParsing:
@@ -677,3 +678,480 @@ class TestMainCache:
         rc = cmd_cache(Args(), config)
         assert rc == 0
         assert "No cache to drop" in capsys.readouterr().out
+
+    def test_cache_status_with_cache(self, test_book_path, tmp_path, capsys):
+        from gcg.cli import cmd_cache
+        from gcg.config import Config
+
+        config = Config(
+            book_path=test_book_path,
+            cache_path=tmp_path / "cache.sqlite",
+        )
+
+        class BuildArgs:
+            action = "build"
+            force = False
+
+        cmd_cache(BuildArgs(), config)
+        capsys.readouterr()
+
+        class StatusArgs:
+            action = "status"
+            force = False
+
+        rc = cmd_cache(StatusArgs(), config)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Cache exists: True" in out
+        assert "Cache size:" in out
+
+
+# ===================================================================
+# Accounts: tree-prune and full-account
+# ===================================================================
+
+
+class TestAccountsTreePrune:
+    def test_tree_prune(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path) + ["accounts", "Groceries", "--tree-prune"]
+        )
+        assert rc == 0
+        out = capsys.readouterr().out
+        # Should include ancestors
+        assert "Assets" in out or "Expenses" in out
+
+    def test_full_account(self, test_book_path, capsys):
+        rc = main(
+            _book(test_book_path)
+            + ["--full-account", "--format", "json", "accounts"]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        # Full account paths should contain ":"
+        names_with_colon = [r["name"] for r in data if ":" in r["name"]]
+        assert len(names_with_colon) > 0
+
+
+# ===================================================================
+# Grep: additional filter coverage
+# ===================================================================
+
+
+class TestGrepFilters:
+    def test_grep_before_date(self, test_book_path, capsys):
+        """--before should filter out later transactions."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "grep",
+                "",
+                "--before",
+                "2026-01-10",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        for row in data:
+            assert row["date"] < "2026-01-10"
+
+    def test_grep_account_filter(self, test_book_path, capsys):
+        """--account should restrict results to matching accounts."""
+        rc = main(
+            _book(test_book_path) + ["grep", "Tesco", "--account", "Groceries"]
+        )
+        assert rc == 0
+
+    def test_grep_account_invalid_regex(self, test_book_path):
+        """Invalid --account regex should return exit 2."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "grep",
+                "Tesco",
+                "--account",
+                "[bad",
+                "--account-regex",
+            ]
+        )
+        assert rc == 2
+
+    def test_grep_date_range(self, test_book_path, capsys):
+        """--date range should filter transactions."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "grep",
+                "",
+                "--date",
+                "2026-01-10..2026-01-20",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        for row in data:
+            assert "2026-01-10" <= row["date"] <= "2026-01-20"
+
+    def test_grep_case_sensitive(self, test_book_path):
+        """Case-sensitive search for lowercase should not match."""
+        rc = main(
+            _book(test_book_path) + ["grep", "tesco", "--case-sensitive"]
+        )
+        # "tesco" lowercase shouldn't match "Tesco"
+        assert rc == 1
+
+    def test_grep_signed(self, test_book_path, capsys):
+        """--signed should show signed amounts."""
+        rc = main(
+            _book(test_book_path)
+            + ["--format", "json", "grep", "Tesco", "--signed"]
+        )
+        assert rc == 0
+
+    def test_grep_no_subtree(self, test_book_path, capsys):
+        """--no-subtree with exact match should exclude children."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "grep",
+                "",
+                "--account",
+                "^Expenses$",
+                "--account-regex",
+                "--no-subtree",
+            ]
+        )
+        # Expenses itself has no splits, only children do
+        assert rc == 1
+
+    def test_grep_full_account(self, test_book_path, capsys):
+        """--full-account should show full paths."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--full-account",
+                "--format",
+                "json",
+                "grep",
+                "Tesco",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert any(":" in r["account"] for r in data)
+
+
+# ===================================================================
+# Grep: --full-tx and balanced context
+# ===================================================================
+
+
+class TestGrepFullTx:
+    def test_full_tx_json(self, test_book_path, capsys):
+        """--full-tx with JSON should return transaction objects."""
+        rc = main(
+            _book(test_book_path)
+            + ["--format", "json", "grep", "Tesco", "--full-tx"]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) > 0
+        assert "tx_guid" in data[0]
+        assert "splits" in data[0]
+
+    def test_full_tx_csv(self, test_book_path, capsys):
+        """--full-tx with CSV should flatten to splits."""
+        rc = main(
+            _book(test_book_path)
+            + ["--format", "csv", "grep", "Tesco", "--full-tx"]
+        )
+        assert rc == 0
+        lines = capsys.readouterr().out.strip().split("\n")
+        assert len(lines) >= 2  # header + data
+
+    def test_full_tx_balanced(self, test_book_path, capsys):
+        """--full-tx --context balanced should show balanced splits."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "grep",
+                "Tesco",
+                "--full-tx",
+                "--context",
+                "balanced",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        assert len(data) > 0
+        # Each tx should have splits
+        for tx in data:
+            assert len(tx["splits"]) > 0
+
+
+# ===================================================================
+# Grep: currency options
+# ===================================================================
+
+
+class TestGrepCurrency:
+    def test_grep_currency_base(self, test_book_path, capsys):
+        """--currency base should use base currency."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "grep",
+                "Tesco",
+                "--currency",
+                "base",
+                "--base-currency",
+                "EUR",
+            ]
+        )
+        assert rc == 0
+
+    def test_grep_currency_split(self, test_book_path, capsys):
+        """--currency split should use per-split currency."""
+        rc = main(
+            _book(test_book_path) + ["grep", "Tesco", "--currency", "split"]
+        )
+        assert rc == 0
+
+    def test_grep_fx_lookback(self, test_book_path, capsys):
+        """--fx-lookback should be accepted."""
+        rc = main(
+            _book(test_book_path) + ["grep", "Tesco", "--fx-lookback", "60"]
+        )
+        assert rc == 0
+
+
+# ===================================================================
+# Ledger: additional filter coverage
+# ===================================================================
+
+
+class TestLedgerFilters:
+    def test_ledger_amount_min(self, test_book_path, capsys):
+        """Amount min filter should work."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "ledger",
+                "Checking",
+                "--amount",
+                "100..",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        for row in data:
+            assert Decimal(row["amount"]) >= 100
+
+    def test_ledger_amount_max(self, test_book_path, capsys):
+        """Amount max filter should work."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "ledger",
+                "Checking",
+                "--amount",
+                "..50",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        for row in data:
+            assert Decimal(row["amount"]) <= 50
+
+    def test_ledger_signed(self, test_book_path, capsys):
+        """--signed should show negative amounts."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "ledger",
+                "Checking",
+                "--signed",
+            ]
+        )
+        assert rc == 0
+        data = json.loads(capsys.readouterr().out)
+        # Should have some negative amounts (debits)
+        has_negative = any(Decimal(r["amount"]) < 0 for r in data)
+        assert has_negative
+
+    def test_ledger_no_subtree(self, test_book_path, capsys):
+        """--no-subtree with exact match should exclude children."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "ledger",
+                "^Expenses$",
+                "--account-regex",
+                "--no-subtree",
+            ]
+        )
+        # Expenses parent has no direct splits
+        assert rc == 1
+
+    def test_ledger_date_range(self, test_book_path, capsys):
+        """--date range should filter."""
+        rc = main(
+            _book(test_book_path)
+            + [
+                "--format",
+                "json",
+                "ledger",
+                "Checking",
+                "--date",
+                "2026-01-10..2026-01-20",
+            ]
+        )
+        assert rc == 0
+
+
+# ===================================================================
+# Doctor: additional coverage
+# ===================================================================
+
+
+class TestDoctorExtended:
+    def test_doctor_nonexistent_book(self, tmp_path, capsys):
+        """Doctor with missing book should still succeed."""
+        from gcg.cli import cmd_doctor
+        from gcg.config import Config
+
+        config = Config(book_path=tmp_path / "nope.gnucash")
+
+        class Args:
+            pass
+
+        rc = cmd_doctor(Args(), config)
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Book exists: False" in out
+
+
+# ===================================================================
+# Internal helpers
+# ===================================================================
+
+
+class TestInternalHelpers:
+    def test_account_name_short(self):
+        from gcg.cli import _account_name
+
+        assert _account_name("Assets:Bank:UK", False) == "UK"
+
+    def test_account_name_full(self):
+        from gcg.cli import _account_name
+
+        assert _account_name("Assets:Bank:UK", True) == "Assets:Bank:UK"
+
+    def test_sort_rows_by_amount(self):
+        from gcg.cli import _sort_rows
+
+        rows = [
+            SplitRow(
+                date=date(2026, 1, 1),
+                description="A",
+                account="X",
+                memo=None,
+                notes=None,
+                amount=Decimal("100"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t1",
+                split_guid="s1",
+            ),
+            SplitRow(
+                date=date(2026, 1, 2),
+                description="B",
+                account="Y",
+                memo=None,
+                notes=None,
+                amount=Decimal("50"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t2",
+                split_guid="s2",
+            ),
+        ]
+        sorted_rows = _sort_rows(rows, "amount", False)
+        assert sorted_rows[0].amount == Decimal("50")
+        assert sorted_rows[1].amount == Decimal("100")
+
+    def test_sort_rows_by_account(self):
+        from gcg.cli import _sort_rows
+
+        rows = [
+            SplitRow(
+                date=date(2026, 1, 1),
+                description="A",
+                account="Zebra",
+                memo=None,
+                notes=None,
+                amount=Decimal("10"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t1",
+                split_guid="s1",
+            ),
+            SplitRow(
+                date=date(2026, 1, 1),
+                description="B",
+                account="Alpha",
+                memo=None,
+                notes=None,
+                amount=Decimal("20"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t2",
+                split_guid="s2",
+            ),
+        ]
+        sorted_rows = _sort_rows(rows, "account", False)
+        assert sorted_rows[0].account == "Alpha"
+
+    def test_sort_rows_by_description(self):
+        from gcg.cli import _sort_rows
+
+        rows = [
+            SplitRow(
+                date=date(2026, 1, 1),
+                description="Zebra",
+                account="X",
+                memo=None,
+                notes=None,
+                amount=Decimal("10"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t1",
+                split_guid="s1",
+            ),
+            SplitRow(
+                date=date(2026, 1, 1),
+                description="Alpha",
+                account="X",
+                memo=None,
+                notes=None,
+                amount=Decimal("20"),
+                currency="EUR",
+                fx_rate=None,
+                tx_guid="t2",
+                split_guid="s2",
+            ),
+        ]
+        sorted_rows = _sort_rows(rows, "description", False)
+        assert sorted_rows[0].description == "Alpha"
