@@ -148,7 +148,7 @@ The release checklist in PyPi.md references a CHANGELOG that doesn't
 exist.
 
 Action: Create a changelog and populate it for this initial commit.
-Status: Pending
+Status: Done
 
 ### Consider single source of truth for version
 Version is duplicated in `__init__.py` and `pyproject.toml`. Consider
