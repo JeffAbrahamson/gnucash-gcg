@@ -633,15 +633,6 @@ def cmd_grep(args, config: Config) -> int:
                 full_account=full_account,
             )
 
-            # Sort
-            rows = _sort_rows(rows, args.sort, args.reverse)
-
-            # Limit/offset
-            if args.offset:
-                rows = rows[args.offset :]
-            if args.limit:
-                rows = rows[: args.limit]
-
             formatter = OutputFormatter(
                 format_type=args.format,
                 show_header=not args.no_header,
@@ -657,8 +648,18 @@ def cmd_grep(args, config: Config) -> int:
                     notes_map=notes_map,
                     full_account=full_account,
                 )
+                tx_rows = _sort_tx_rows(tx_rows, args.sort, args.reverse)
+                if args.offset:
+                    tx_rows = tx_rows[args.offset :]
+                if args.limit:
+                    tx_rows = tx_rows[: args.limit]
                 formatter.format_transactions(tx_rows)
             else:
+                rows = _sort_rows(rows, args.sort, args.reverse)
+                if args.offset:
+                    rows = rows[args.offset :]
+                if args.limit:
+                    rows = rows[: args.limit]
                 formatter.format_splits(rows)
 
             return 0
@@ -1226,6 +1227,22 @@ def _sort_rows(
         "date": lambda r: r.date,
         "amount": lambda r: r.amount,
         "account": lambda r: r.account,
+        "description": lambda r: r.description,
+    }
+    key_fn = key_map.get(sort_key, key_map["date"])
+    return sorted(rows, key=key_fn, reverse=reverse)
+
+
+def _sort_tx_rows(
+    rows: list[TransactionRow], sort_key: str, reverse: bool
+) -> list[TransactionRow]:
+    """Sort transaction rows by the specified key."""
+    key_map = {
+        "date": lambda r: r.date,
+        "amount": lambda r: (
+            max(abs(s.amount) for s in r.splits) if r.splits else 0
+        ),
+        "account": lambda r: (r.splits[0].account if r.splits else ""),
         "description": lambda r: r.description,
     }
     key_fn = key_map.get(sort_key, key_map["date"])

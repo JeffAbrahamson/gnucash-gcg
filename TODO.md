@@ -28,7 +28,7 @@ are never sorted. SPEC §10 says sorting applies to transaction objects
 when `--full-tx` is used.
 
 Action: Conform to spec
-Status: Pending
+Status: Done
 
 ### Remove or implement `--fields`
 cli.py:126-129 defines a `--fields` argument that no command handler ever
