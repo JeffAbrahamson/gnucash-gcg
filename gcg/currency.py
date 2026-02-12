@@ -112,70 +112,70 @@ class CurrencyConverter:
         earliest_date = on_date - timedelta(days=self.lookback_days)
 
         try:
-            conn = sqlite3.connect(uri, uri=True)
-            cursor = conn.cursor()
+            with sqlite3.connect(uri, uri=True) as conn:
+                cursor = conn.cursor()
 
-            # Try direct lookup: from_currency -> to_currency
-            # GnuCash stores prices as commodity -> currency
-            cursor.execute(
-                """
-                SELECT value_num, value_denom
-                FROM prices p
-                JOIN commodities c1 ON p.commodity_guid = c1.guid
-                JOIN commodities c2 ON p.currency_guid = c2.guid
-                WHERE c1.mnemonic = ?
-                  AND c2.mnemonic = ?
-                  AND date(p.date) <= ?
-                  AND date(p.date) >= ?
-                ORDER BY p.date DESC
-                LIMIT 1
-                """,
-                (
-                    from_currency,
-                    to_currency,
-                    on_date.isoformat(),
-                    earliest_date.isoformat(),
-                ),
-            )
-            result = cursor.fetchone()
+                # Try direct lookup: from_currency -> to_currency
+                # GnuCash stores prices as commodity -> currency
+                cursor.execute(
+                    """
+                    SELECT value_num, value_denom
+                    FROM prices p
+                    JOIN commodities c1
+                        ON p.commodity_guid = c1.guid
+                    JOIN commodities c2
+                        ON p.currency_guid = c2.guid
+                    WHERE c1.mnemonic = ?
+                      AND c2.mnemonic = ?
+                      AND date(p.date) <= ?
+                      AND date(p.date) >= ?
+                    ORDER BY p.date DESC
+                    LIMIT 1
+                    """,
+                    (
+                        from_currency,
+                        to_currency,
+                        on_date.isoformat(),
+                        earliest_date.isoformat(),
+                    ),
+                )
+                result = cursor.fetchone()
 
-            if result:
-                num, denom = result
-                rate = Decimal(num) / Decimal(denom)
-                conn.close()
-                return rate
+                if result:
+                    num, denom = result
+                    return Decimal(num) / Decimal(denom)
 
-            # Try inverse lookup: to_currency -> from_currency
-            cursor.execute(
-                """
-                SELECT value_num, value_denom
-                FROM prices p
-                JOIN commodities c1 ON p.commodity_guid = c1.guid
-                JOIN commodities c2 ON p.currency_guid = c2.guid
-                WHERE c1.mnemonic = ?
-                  AND c2.mnemonic = ?
-                  AND date(p.date) <= ?
-                  AND date(p.date) >= ?
-                ORDER BY p.date DESC
-                LIMIT 1
-                """,
-                (
-                    to_currency,
-                    from_currency,
-                    on_date.isoformat(),
-                    earliest_date.isoformat(),
-                ),
-            )
-            result = cursor.fetchone()
+                # Try inverse lookup: to_currency -> from_currency
+                cursor.execute(
+                    """
+                    SELECT value_num, value_denom
+                    FROM prices p
+                    JOIN commodities c1
+                        ON p.commodity_guid = c1.guid
+                    JOIN commodities c2
+                        ON p.currency_guid = c2.guid
+                    WHERE c1.mnemonic = ?
+                      AND c2.mnemonic = ?
+                      AND date(p.date) <= ?
+                      AND date(p.date) >= ?
+                    ORDER BY p.date DESC
+                    LIMIT 1
+                    """,
+                    (
+                        to_currency,
+                        from_currency,
+                        on_date.isoformat(),
+                        earliest_date.isoformat(),
+                    ),
+                )
+                result = cursor.fetchone()
 
-            conn.close()
+                if result:
+                    num, denom = result
+                    inverse_rate = Decimal(num) / Decimal(denom)
+                    return Decimal("1") / inverse_rate
 
-            if result:
-                num, denom = result
-                inverse_rate = Decimal(num) / Decimal(denom)
-                return Decimal("1") / inverse_rate
-
-            return None
+                return None
 
         except sqlite3.Error:
             return None

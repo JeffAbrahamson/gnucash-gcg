@@ -65,7 +65,7 @@ Same issue in `currency.py:_lookup_price`. Use `with` statements or
 try/finally to prevent leaks on non-sqlite3 exceptions.
 
 Action: Fix.  Prefer `with` over `try/finalize` unless there's a good argument for the latter.
-Status: Pending
+Status: Done
 
 ## P3 — REPL Parity
 
