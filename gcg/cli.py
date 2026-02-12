@@ -5,6 +5,7 @@ Provides the main entry point and argument parsing for all commands.
 """
 
 import argparse
+import os
 import re
 import sys
 from datetime import date, datetime, timedelta
@@ -121,11 +122,6 @@ def create_parser() -> argparse.ArgumentParser:
         "--no-header",
         action="store_true",
         help="Omit header row in table/CSV output",
-    )
-    parser.add_argument(
-        "--fields",
-        metavar="LIST",
-        help="Comma-separated list of fields to display",
     )
     parser.add_argument(
         "--sort",
@@ -898,8 +894,6 @@ def cmd_doctor(args, config: Config) -> int:
 
     print()
     print("Environment:")
-    import os
-
     print(
         f"  GCG_DEFAULT_BOOK_PATH: "
         f"{os.environ.get('GCG_DEFAULT_BOOK_PATH', '(not set)')}"

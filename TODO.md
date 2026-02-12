@@ -35,7 +35,7 @@ cli.py:126-129 defines a `--fields` argument that no command handler ever
 reads. Either wire it up or remove it.
 
 Action: Drop the argument
-Status: Pending
+Status: Done
 
 ## P2 — Design / Architecture
 
@@ -194,4 +194,4 @@ cli.py:901 imports `os` inside `cmd_doctor`; the rest of the codebase
 uses top-level imports.
 
 Action: Fix.
-Status: Pending
+Status: Done
