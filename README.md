@@ -317,9 +317,6 @@ gcg --help
 python -m gcg --help
 python -m gcg accounts "Bank"
 python -m gcg grep "amazon" --after 2025-01-01
-
-# Option 3: Run the CLI directly
-python gcg/cli.py --help
 ```
 
 ### Project Structure

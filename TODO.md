@@ -119,14 +119,14 @@ Status: Done
 SPEC.md:8 says "piekash".
 
 Action: Fix.
-Status: Pending
+Status: Done
 
 ### Fix SPEC.md example: `gcg grep -i "tesco"`
 SPEC.md:366 — `-i` is the global interactive flag, not case-insensitive.
 This example would launch the REPL instead of grepping.
 
 Action: Fix, -i should stay "interactive" and gcg should remain case insensitive unless requesting to preserve case
-Status: Pending
+Status: Done
 
 ### Fix README "Run the CLI directly" suggestion
 README line 322 suggests `python gcg/cli.py --help`, but relative imports
@@ -134,14 +134,14 @@ will fail unless the package is installed. Remove or replace with
 `python -m gcg --help`.
 
 Action: Fix, recommend `python -m gcg --help` or (better?) `gcg --help`.
-Status: Pending
+Status: Done
 
 ### Reconcile all docs for env var names and priority order
 README, SPEC.md, CLAUDE.md, and config.py must agree on the env var name
 and the resolution order for book path.
 
 Action: Fix, possibly already done with P1 bugs.
-Status: Pending
+Status: Done — completed as part of P1#1 and P1#2
 
 ### Add a CHANGELOG
 The release checklist in PyPi.md references a CHANGELOG that doesn't
