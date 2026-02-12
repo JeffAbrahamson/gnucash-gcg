@@ -14,6 +14,9 @@ COPY --chmod=755 docker/stuff/packages-dev.sh ./
 RUN ./packages-dev.sh 2>&1 | tee /var/packages-dev.out
 
 # Install Python package and dependencies from pyproject.toml
+# Version is passed from docker-manage.sh since .git is not available in container
+ARG SETUPTOOLS_SCM_PRETEND_VERSION
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 COPY pyproject.toml README.md ./
 COPY gcg/ ./gcg/
 RUN pip3 install --break-system-packages -e ".[dev]"

@@ -6,6 +6,17 @@ export SSH_USER=$LOGNAME
 
 cd "$(dirname "$0")"
 
+# Get version from git for setuptools-scm (since .git is not in container)
+# Format as PEP 440 compliant version
+_git_desc=$(git -C .. describe --tags --always 2>/dev/null || echo "")
+if [[ "$_git_desc" =~ ^[0-9]+\.[0-9]+ ]]; then
+    # Has version tag, use as-is or convert to PEP 440
+    export SETUPTOOLS_SCM_PRETEND_VERSION="$_git_desc"
+else
+    # No version tag, just commit hash - format as dev version
+    export SETUPTOOLS_SCM_PRETEND_VERSION="0.1.dev0+g${_git_desc:-unknown}"
+fi
+
 BUILD_NOCACHE=""
 while getopts "b" opt; do
     case "$opt" in
