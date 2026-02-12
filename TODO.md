@@ -74,7 +74,7 @@ The CLI supports `--date A..B` via `parse_date_range`, but the REPL's
 `cmd_grep` and `cmd_ledger` only accept `--after`/`--before` separately.
 
 Action: Fix.
-Status: Pending
+Status: Done
 
 ### Add error handling for REPL amount parsing
 In repl.py:440-446, invalid amount strings raise unhandled

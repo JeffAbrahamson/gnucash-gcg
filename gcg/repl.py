@@ -9,7 +9,7 @@ import re
 import readline
 import shlex
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Optional
@@ -394,6 +394,7 @@ Options are the same as CLI. Example:
         parser.add_argument("--no-subtree", action="store_true")
         parser.add_argument("--after", type=str)
         parser.add_argument("--before", type=str)
+        parser.add_argument("--date", type=str, dest="date_range")
         parser.add_argument("--amount", type=str)
         parser.add_argument("--signed", action="store_true")
         parser.add_argument("--full-tx", action="store_true")
@@ -422,6 +423,27 @@ Options are the same as CLI. Example:
         # Parse dates
         after_date = None
         before_date = None
+        if parsed.date_range:
+            dr = parsed.date_range
+            if ".." not in dr:
+                print(
+                    f"Invalid date range: {dr}. "
+                    "Use format A..B, A.., or ..B",
+                    file=sys.stderr,
+                )
+                return
+            start_str, end_str = dr.split("..", 1)
+            try:
+                if start_str.strip():
+                    after_date = date.fromisoformat(start_str.strip())
+                if end_str.strip():
+                    # --date end is inclusive, add 1 day
+                    before_date = date.fromisoformat(
+                        end_str.strip()
+                    ) + timedelta(days=1)
+            except ValueError:
+                print(f"Invalid date range: {dr}", file=sys.stderr)
+                return
         if parsed.after:
             try:
                 after_date = date.fromisoformat(parsed.after)
@@ -596,6 +618,7 @@ Options are the same as CLI. Example:
         parser.add_argument("--no-subtree", action="store_true")
         parser.add_argument("--after", type=str)
         parser.add_argument("--before", type=str)
+        parser.add_argument("--date", type=str, dest="date_range")
         parser.add_argument("--amount", type=str)
         parser.add_argument("--signed", action="store_true")
         parser.add_argument("--no-header", action="store_true")
@@ -612,6 +635,27 @@ Options are the same as CLI. Example:
         # Parse dates
         after_date = None
         before_date = None
+        if parsed.date_range:
+            dr = parsed.date_range
+            if ".." not in dr:
+                print(
+                    f"Invalid date range: {dr}. "
+                    "Use format A..B, A.., or ..B",
+                    file=sys.stderr,
+                )
+                return
+            start_str, end_str = dr.split("..", 1)
+            try:
+                if start_str.strip():
+                    after_date = date.fromisoformat(start_str.strip())
+                if end_str.strip():
+                    # --date end is inclusive, add 1 day
+                    before_date = date.fromisoformat(
+                        end_str.strip()
+                    ) + timedelta(days=1)
+            except ValueError:
+                print(f"Invalid date range: {dr}", file=sys.stderr)
+                return
         if parsed.after:
             try:
                 after_date = date.fromisoformat(parsed.after)
