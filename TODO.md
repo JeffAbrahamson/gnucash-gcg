@@ -82,7 +82,7 @@ In repl.py:440-446, invalid amount strings raise unhandled
 `ArgumentTypeError` via `parse_amount_range`.
 
 Action: Fix
-Status: Pending
+Status: Done
 
 ## P4 — Tests
 

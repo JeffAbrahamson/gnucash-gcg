@@ -10,7 +10,7 @@ import readline
 import shlex
 import sys
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Optional
 
@@ -440,10 +440,17 @@ Options are the same as CLI. Example:
         if parsed.amount:
             if ".." in parsed.amount:
                 parts = parsed.amount.split("..", 1)
-                if parts[0]:
-                    min_amt = Decimal(parts[0])
-                if parts[1]:
-                    max_amt = Decimal(parts[1])
+                try:
+                    if parts[0]:
+                        min_amt = Decimal(parts[0])
+                    if parts[1]:
+                        max_amt = Decimal(parts[1])
+                except InvalidOperation:
+                    print(
+                        f"Invalid amount: {parsed.amount}",
+                        file=sys.stderr,
+                    )
+                    return
 
         search_fields = set(parsed.search_fields.split(","))
 
@@ -623,10 +630,17 @@ Options are the same as CLI. Example:
         if parsed.amount:
             if ".." in parsed.amount:
                 parts = parsed.amount.split("..", 1)
-                if parts[0]:
-                    min_amt = Decimal(parts[0])
-                if parts[1]:
-                    max_amt = Decimal(parts[1])
+                try:
+                    if parts[0]:
+                        min_amt = Decimal(parts[0])
+                    if parts[1]:
+                        max_amt = Decimal(parts[1])
+                except InvalidOperation:
+                    print(
+                        f"Invalid amount: {parsed.amount}",
+                        file=sys.stderr,
+                    )
+                    return
 
         try:
             accounts = get_account_by_pattern(
