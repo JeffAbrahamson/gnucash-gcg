@@ -24,16 +24,19 @@ from gcg.book import (
     open_gnucash_book,
 )
 from gcg.config import Config, load_config
-from gcg.currency import (
-    CurrencyConverter,
-    determine_display_currency,
-    get_account_currencies,
-)
 from gcg.output import (
     AccountRow,
     OutputFormatter,
     SplitRow,
     TransactionRow,
+)
+from gcg.shared import (
+    account_name as _account_name,
+    prune_to_matching_paths as _prune_to_matching_paths,
+    sort_rows as _sort_rows,
+    sort_tx_rows as _sort_tx_rows,
+    splits_to_rows as _shared_splits_to_rows,
+    splits_to_transactions as _shared_splits_to_transactions,
 )
 
 
@@ -392,46 +395,6 @@ def resolve_date_filters(args) -> tuple[Optional[date], Optional[date]]:
             before_date = range_end + timedelta(days=1)
 
     return (after_date, before_date)
-
-
-def _prune_to_matching_paths(matching_accounts: list, book) -> list:
-    """
-    Prune account tree to show paths to matching accounts.
-
-    Shows the tree from root down to matching paths, plus full subtrees
-    below any matching accounts.
-
-    Args:
-        matching_accounts: List of accounts that matched the pattern
-        book: The GnuCash book
-
-    Returns:
-        List of accounts to display (ancestors + matches + descendants)
-    """
-    matching_set = set(matching_accounts)
-    result_set = set(matching_accounts)
-
-    # Add all ancestors of matching accounts
-    for acc in matching_accounts:
-        parent = acc.parent
-        while parent is not None:
-            if parent.type not in ("ROOT", "TRADING"):
-                result_set.add(parent)
-            parent = parent.parent
-
-    # Add all descendants of matching accounts
-    all_accounts = [
-        a for a in book.accounts if a.type not in ("ROOT", "TRADING")
-    ]
-    for acc in all_accounts:
-        parent = acc.parent
-        while parent is not None:
-            if parent in matching_set:
-                result_set.add(acc)
-                break
-            parent = parent.parent
-
-    return list(result_set)
 
 
 def cmd_accounts(args, config: Config) -> int:
@@ -949,29 +912,7 @@ def _splits_to_rows(
     full_account: bool = False,
 ) -> list[SplitRow]:
     """Convert split/tx/acc tuples to SplitRow objects."""
-    rows = []
-    converter = CurrencyConverter(
-        config.resolve_book_path(),
-        base_currency=args.base_currency or config.base_currency,
-        lookback_days=args.fx_lookback or config.fx_lookback_days,
-    )
-
-    currency_mode = args.currency
-    also_original = args.also_original
-    signed = args.signed
-
-    # Determine target currency
-    account_currencies = get_account_currencies(
-        [acc for _, _, acc in splits_data]
-    )
-    target_currency = determine_display_currency(
-        currency_mode,
-        [s for s, _, _ in splits_data],
-        account_currencies,
-        config.base_currency,
-    )
-
-    # If notes_map not provided and notes supported, batch fetch them
+    # Batch fetch notes if needed and not already provided
     if notes_map is None and (info.has_notes_column or info.has_slots_notes):
         tx_guids = list({tx.guid for _, tx, _ in splits_data})
         notes_map = get_transaction_notes_batch(
@@ -979,55 +920,18 @@ def _splits_to_rows(
             tx_guids,
             info.has_notes_column,
         )
-    elif notes_map is None:
-        notes_map = {}
 
-    for split, tx, acc in splits_data:
-        split_value = Decimal(str(split.value))
-        if not signed:
-            split_value = abs(split_value)
-
-        split_currency = acc.commodity.mnemonic if acc.commodity else "???"
-
-        # Currency conversion
-        if target_currency and target_currency != split_currency:
-            result = converter.convert(
-                split_value,
-                split_currency,
-                target_currency,
-                tx.post_date,
-            )
-            display_amount = result.amount
-            display_currency = result.currency
-            fx_rate = result.fx_rate if result.converted else None
-        else:
-            display_amount = split_value
-            display_currency = split_currency
-            fx_rate = None
-
-        # Get notes from batch-fetched map
-        notes = notes_map.get(tx.guid)
-
-        row = SplitRow(
-            date=tx.post_date,
-            description=tx.description,
-            account=_account_name(acc.fullname, full_account),
-            memo=split.memo,
-            notes=notes,
-            amount=display_amount,
-            currency=display_currency,
-            fx_rate=fx_rate,
-            tx_guid=tx.guid,
-            split_guid=split.guid,
-        )
-
-        if also_original and fx_rate:
-            row.amount_orig = split_value
-            row.currency_orig = split_currency
-
-        rows.append(row)
-
-    return rows
+    return _shared_splits_to_rows(
+        splits_data,
+        db_path=config.resolve_book_path(),
+        base_currency=(args.base_currency or config.base_currency),
+        lookback_days=(args.fx_lookback or config.fx_lookback_days),
+        currency_mode=args.currency,
+        full_account=full_account,
+        signed=args.signed,
+        notes_map=notes_map,
+        also_original=args.also_original,
+    )
 
 
 def _splits_to_transactions(
@@ -1039,7 +943,7 @@ def _splits_to_transactions(
     full_account: bool = False,
 ) -> list[TransactionRow]:
     """Convert split data to TransactionRow objects (for --full-tx)."""
-    # If notes_map not provided and notes supported, batch fetch them
+    # Batch fetch notes if needed and not already provided
     if notes_map is None and (info.has_notes_column or info.has_slots_notes):
         tx_guids = list({tx.guid for _, tx, _ in splits_data})
         notes_map = get_transaction_notes_batch(
@@ -1047,90 +951,15 @@ def _splits_to_transactions(
             tx_guids,
             info.has_notes_column,
         )
-    elif notes_map is None:
-        notes_map = {}
 
-    context_mode = args.context
-    signed = args.signed
-
-    # Group by transaction
-    tx_map = {}
-    for split, tx, acc in splits_data:
-        if tx.guid not in tx_map:
-            tx_map[tx.guid] = {
-                "tx": tx,
-                "notes": notes_map.get(tx.guid),
-                "all_splits": [],  # All splits in the transaction
-                "matching_splits": set(),  # Guids of matching splits
-            }
-
-        tx_map[tx.guid]["matching_splits"].add(split.guid)
-
-        # Add all splits of the transaction (we'll filter later for balanced)
-        for s in tx.splits:
-            tx_map[tx.guid]["all_splits"].append(s)
-
-    rows = []
-    for guid, data in tx_map.items():
-        tx = data["tx"]
-
-        # Dedupe all_splits by guid
-        seen_guids = set()
-        unique_all_splits = []
-        for s in data["all_splits"]:
-            if s.guid not in seen_guids:
-                seen_guids.add(s.guid)
-                unique_all_splits.append(s)
-
-        if context_mode == "balanced":
-            # Implement balanced context per SPEC §15.2
-            selected_splits = _select_balanced_splits(
-                unique_all_splits,
-                data["matching_splits"],
-                signed,
-            )
-        else:
-            # Full context: include all splits
-            selected_splits = unique_all_splits
-
-        # Convert to SplitRow objects
-        split_rows = []
-        for s in selected_splits:
-            split_acc = s.account
-            split_value = Decimal(str(s.value))
-            if not signed:
-                split_value = abs(split_value)
-
-            split_rows.append(
-                SplitRow(
-                    date=tx.post_date,
-                    description=tx.description,
-                    account=_account_name(split_acc.fullname, full_account),
-                    memo=s.memo,
-                    notes=data["notes"],
-                    amount=split_value,
-                    currency=(
-                        split_acc.commodity.mnemonic
-                        if split_acc.commodity
-                        else ""
-                    ),
-                    fx_rate=None,
-                    tx_guid=tx.guid,
-                    split_guid=s.guid,
-                )
-            )
-
-        rows.append(
-            TransactionRow(
-                tx_guid=guid,
-                date=tx.post_date,
-                description=tx.description,
-                notes=data["notes"],
-                splits=split_rows,
-            )
-        )
-
-    return rows
+    return _shared_splits_to_transactions(
+        splits_data,
+        notes_map=notes_map,
+        signed=args.signed,
+        full_account=full_account,
+        context_mode=args.context,
+        select_balanced_fn=_select_balanced_splits,
+    )
 
 
 def _select_balanced_splits(
@@ -1210,43 +1039,6 @@ def _select_balanced_splits(
         selected.extend(subset)
 
     return selected
-
-
-def _account_name(fullname: str, full_account: bool) -> str:
-    """Return account name - full path or just final component."""
-    if full_account:
-        return fullname
-    return fullname.rsplit(":", 1)[-1]
-
-
-def _sort_rows(
-    rows: list[SplitRow], sort_key: str, reverse: bool
-) -> list[SplitRow]:
-    """Sort split rows by the specified key."""
-    key_map = {
-        "date": lambda r: r.date,
-        "amount": lambda r: r.amount,
-        "account": lambda r: r.account,
-        "description": lambda r: r.description,
-    }
-    key_fn = key_map.get(sort_key, key_map["date"])
-    return sorted(rows, key=key_fn, reverse=reverse)
-
-
-def _sort_tx_rows(
-    rows: list[TransactionRow], sort_key: str, reverse: bool
-) -> list[TransactionRow]:
-    """Sort transaction rows by the specified key."""
-    key_map = {
-        "date": lambda r: r.date,
-        "amount": lambda r: (
-            max(abs(s.amount) for s in r.splits) if r.splits else 0
-        ),
-        "account": lambda r: (r.splits[0].account if r.splits else ""),
-        "description": lambda r: r.description,
-    }
-    key_fn = key_map.get(sort_key, key_map["date"])
-    return sorted(rows, key=key_fn, reverse=reverse)
 
 
 def main(argv: Optional[list[str]] = None) -> int:

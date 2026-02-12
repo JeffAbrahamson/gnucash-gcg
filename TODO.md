@@ -48,7 +48,7 @@ and `cmd_ledger`. Extract into a shared module so bug fixes and features
 only need to be applied once.
 
 Action: Refactor as indicated here to a shared file or module
-Status: Pending
+Status: Done
 
 ### Wire up cache search or remove dead code
 `CacheManager.search()` (cache.py:199-258) exists but is never called.
