@@ -15,6 +15,7 @@ warnings.filterwarnings("ignore", module="sqlalchemy.*")
 
 try:
     from sqlalchemy.exc import SAWarning
+
     warnings.filterwarnings("ignore", category=SAWarning)
 except ImportError:
     pass

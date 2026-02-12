@@ -165,8 +165,8 @@ These options are available for `grep` and `ledger` commands:
 The book path is resolved in order:
 
 1. `--book PATH` command-line argument
-2. Config file: `~/.config/gcg/config.toml`
-3. `GCG_DEFAULT_BOOK_PATH` environment variable
+2. `GCG_DEFAULT_BOOK_PATH` environment variable
+3. Config file: `~/.config/gcg/config.toml`
 
 If no book path is configured, gcg will report an error.
 
@@ -317,9 +317,6 @@ gcg --help
 python -m gcg --help
 python -m gcg accounts "Bank"
 python -m gcg grep "amazon" --after 2025-01-01
-
-# Option 3: Run the CLI directly
-python gcg/cli.py --help
 ```
 
 ### Project Structure
@@ -350,10 +347,10 @@ python gcg/cli.py --help
 
 ### Testing with a Real GnuCash Book
 
-Set the `GCG_BOOK` environment variable to point to your GnuCash file:
+Set the `GCG_DEFAULT_BOOK_PATH` environment variable to point to your GnuCash file:
 
 ```bash
-export GCG_BOOK=~/path/to/your/book.gnucash
+export GCG_DEFAULT_BOOK_PATH=~/path/to/your/book.gnucash
 gcg doctor  # Verify it can open the book
 gcg accounts ""  # List all accounts
 ```

@@ -10,7 +10,7 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class CacheManager:
@@ -195,67 +195,6 @@ class CacheManager:
             os.remove(self.cache_path)
             return True
         return False
-
-    def search(
-        self,
-        text: str,
-        use_fts: bool = True,
-        limit: Optional[int] = None,
-    ) -> list[dict]:
-        """
-        Search the cache for matching splits.
-
-        Args:
-            text: Search text
-            use_fts: Use FTS5 full-text search if available
-            limit: Maximum results to return
-
-        Returns:
-            List of matching split dictionaries
-        """
-        if not self.cache_path.exists():
-            raise ValueError("Cache does not exist. Run 'gcg cache build'.")
-
-        conn = sqlite3.connect(str(self.cache_path))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        try:
-            if use_fts:
-                # Use FTS5 for fast search
-                query = """
-                    SELECT s.*
-                    FROM splits s
-                    JOIN splits_fts fts ON s.split_guid = fts.split_guid
-                    WHERE splits_fts MATCH ?
-                    ORDER BY s.tx_date DESC
-                """
-                params: list = [text]
-                if limit:
-                    query += " LIMIT ?"
-                    params.append(limit)
-                cursor.execute(query, params)
-            else:
-                # Fall back to LIKE search
-                pattern = f"%{text.lower()}%"
-                query = """
-                    SELECT *
-                    FROM splits
-                    WHERE description_lower LIKE ?
-                       OR memo_lower LIKE ?
-                       OR account_name_lower LIKE ?
-                    ORDER BY tx_date DESC
-                """
-                params = [pattern, pattern, pattern]
-                if limit:
-                    query += " LIMIT ?"
-                    params.append(limit)
-                cursor.execute(query, params)
-
-            return [dict(row) for row in cursor.fetchall()]
-
-        finally:
-            conn.close()
 
     def _create_schema(self, cursor: sqlite3.Cursor) -> None:
         """Create the cache database schema."""

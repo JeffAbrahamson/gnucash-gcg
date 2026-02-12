@@ -3,7 +3,7 @@ Configuration management for gcg.
 
 Handles loading configuration from multiple sources with precedence:
 1. Command-line arguments (highest)
-2. Environment variables (GCG_BOOK, etc.)
+2. Environment variables (GCG_DEFAULT_BOOK_PATH)
 3. XDG config file (~/.config/gcg/config.toml)
 4. Built-in defaults (lowest)
 """
@@ -160,6 +160,11 @@ def load_config(
             config.cache_enabled = cache_config["enabled"]
         if "path" in cache_config:
             config.cache_path = Path(cache_config["path"])
+
+    # Apply env var (overrides config file, but CLI overrides env var)
+    env_book = os.environ.get("GCG_DEFAULT_BOOK_PATH")
+    if env_book:
+        config.book_path = Path(env_book)
 
     # Apply CLI overrides (highest precedence)
     if book_path is not None:

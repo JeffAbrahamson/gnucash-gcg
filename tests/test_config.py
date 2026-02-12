@@ -3,13 +3,14 @@
 from pathlib import Path
 
 from gcg.config import (
-    Config,
     DEFAULT_BASE_CURRENCY,
     DEFAULT_FX_LOOKBACK_DAYS,
-    get_xdg_config_home,
+    Config,
     get_xdg_cache_home,
+    get_xdg_config_home,
     get_xdg_state_home,
     load_config,
+    load_config_file,
 )
 
 
@@ -117,3 +118,136 @@ class TestLoadConfig:
         assert config.output_format == "csv"
         assert config.base_currency == DEFAULT_BASE_CURRENCY
         assert config.fx_lookback_days == DEFAULT_FX_LOOKBACK_DAYS
+
+    def test_load_config_show_header_override(self):
+        config = load_config(show_header=False)
+        assert config.show_header is False
+
+    def test_load_config_currency_mode_override(self):
+        config = load_config(currency_mode="base")
+        assert config.currency_mode == "base"
+
+
+class TestLoadConfigFile:
+    """Tests for loading config from TOML file."""
+
+    def test_no_config_file(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = load_config_file()
+        assert result == {}
+
+    def test_valid_config_file(self, monkeypatch, tmp_path):
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text(
+            'book = "/path/to/book.gnucash"\n'
+            "\n"
+            "[currency]\n"
+            'base = "USD"\n'
+            "fx_lookback_days = 60\n"
+            'mode = "base"\n'
+            "\n"
+            "[output]\n"
+            'format = "json"\n'
+            "header = false\n"
+            "\n"
+            "[cache]\n"
+            "enabled = false\n"
+            'path = "/tmp/cache.sqlite"\n'
+        )
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = load_config_file()
+        assert result["book"] == "/path/to/book.gnucash"
+        assert result["currency"]["base"] == "USD"
+        assert result["currency"]["fx_lookback_days"] == 60
+        assert result["currency"]["mode"] == "base"
+        assert result["output"]["format"] == "json"
+        assert result["output"]["header"] is False
+        assert result["cache"]["enabled"] is False
+        assert result["cache"]["path"] == "/tmp/cache.sqlite"
+
+    def test_invalid_toml_file(self, monkeypatch, tmp_path, capsys):
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text("this is [not valid toml")
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        result = load_config_file()
+        assert result == {}
+        err = capsys.readouterr().err
+        assert "Warning" in err
+
+
+class TestLoadConfigFromFile:
+    """Test that load_config picks up values from a TOML file."""
+
+    def test_full_config_from_file(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("GCG_DEFAULT_BOOK_PATH", raising=False)
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text(
+            'book = "/file/book.gnucash"\n'
+            "\n"
+            "[currency]\n"
+            'base = "GBP"\n'
+            "fx_lookback_days = 90\n"
+            'mode = "split"\n'
+            "\n"
+            "[output]\n"
+            'format = "csv"\n'
+            "header = false\n"
+            "\n"
+            "[cache]\n"
+            "enabled = false\n"
+            'path = "/tmp/my_cache.sqlite"\n'
+        )
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        config = load_config()
+        assert config.book_path == Path("/file/book.gnucash")
+        assert config.base_currency == "GBP"
+        assert config.fx_lookback_days == 90
+        assert config.currency_mode == "split"
+        assert config.output_format == "csv"
+        assert config.show_header is False
+        assert config.cache_enabled is False
+        assert config.cache_path == Path("/tmp/my_cache.sqlite")
+
+    def test_env_overrides_file(self, monkeypatch, tmp_path):
+        """Env var should override config file book path."""
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text('book = "/file/book.gnucash"\n')
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("GCG_DEFAULT_BOOK_PATH", "/env/book.gnucash")
+        config = load_config()
+        assert config.book_path == Path("/env/book.gnucash")
+
+    def test_cli_overrides_env_and_file(self, monkeypatch, tmp_path):
+        """CLI should override both env var and config file."""
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text('book = "/file/book.gnucash"\n')
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.setenv("GCG_DEFAULT_BOOK_PATH", "/env/book.gnucash")
+        config = load_config(book_path="/cli/book.gnucash")
+        assert config.book_path == Path("/cli/book.gnucash")
+
+    def test_cli_overrides_file(self, monkeypatch, tmp_path):
+        config_dir = tmp_path / "gcg"
+        config_dir.mkdir()
+        config_file = config_dir / "config.toml"
+        config_file.write_text(
+            'book = "/file/book.gnucash"\n' '[currency]\nbase = "GBP"\n'
+        )
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        monkeypatch.delenv("GCG_DEFAULT_BOOK_PATH", raising=False)
+        config = load_config(
+            book_path="/cli/book.gnucash",
+            base_currency="JPY",
+        )
+        assert config.book_path == Path("/cli/book.gnucash")
+        assert config.base_currency == "JPY"

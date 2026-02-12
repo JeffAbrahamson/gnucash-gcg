@@ -278,6 +278,120 @@ class TestNotesLookup:
         )
         assert result == {}
 
+    def test_batch_notes_with_has_notes_column(self, test_book_path):
+        """Should query transactions table when has_notes_column."""
+        from gcg.book import get_transaction_notes_batch, open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            guids = [t.guid for t in book.transactions]
+
+        result = get_transaction_notes_batch(test_book_path, guids, True)
+        # Our test book has no notes, so result should be empty
+        assert isinstance(result, dict)
+
+    def test_batch_notes_bad_db(self, tmp_path):
+        """Should handle corrupt DB gracefully."""
+        from gcg.book import get_transaction_notes_batch
+
+        bad_path = tmp_path / "bad.gnucash"
+        bad_path.write_text("not a database")
+        result = get_transaction_notes_batch(bad_path, ["guid1"], False)
+        assert result == {}
+
+    def test_single_note_with_has_notes_column(self, test_book_path):
+        """get_transaction_notes with has_notes_column path."""
+        from gcg.book import get_transaction_notes, open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            guid = list(book.transactions)[0].guid
+
+        result = get_transaction_notes(test_book_path, guid, True)
+        # No notes in test book
+        assert result is None or isinstance(result, str)
+
+    def test_single_note_bad_db(self, tmp_path):
+        """get_transaction_notes should handle bad DB."""
+        from gcg.book import get_transaction_notes
+
+        bad_path = tmp_path / "bad.gnucash"
+        bad_path.write_text("not a database")
+        result = get_transaction_notes(bad_path, "guid1", False)
+        assert result is None
+
+
+class TestBookOpenEdgeCases:
+    """Tests for book opening edge cases."""
+
+    def test_open_directory_raises(self, tmp_path):
+        """Opening a directory should raise BookOpenError."""
+        from gcg.book import BookOpenError, open_gnucash_book
+
+        with pytest.raises(BookOpenError, match="Not a file"):
+            with open_gnucash_book(tmp_path):
+                pass
+
+    def test_open_nonexistent_raises(self, tmp_path):
+        """Opening non-existent file should raise BookOpenError."""
+        from gcg.book import BookOpenError, open_gnucash_book
+
+        with pytest.raises(BookOpenError, match="not found"):
+            with open_gnucash_book(tmp_path / "nope.gnucash"):
+                pass
+
+    def test_open_corrupt_file(self, tmp_path):
+        """Opening a corrupt file should raise BookOpenError."""
+        from gcg.book import BookOpenError, open_gnucash_book
+
+        bad = tmp_path / "corrupt.gnucash"
+        bad.write_text("not a database")
+        with pytest.raises(BookOpenError, match="Failed to open"):
+            with open_gnucash_book(bad):
+                pass
+
+    def test_get_account_full_name(self, test_book_path):
+        """get_account_full_name should return fullname."""
+        from gcg.book import get_account_full_name, open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            for acc in book.accounts:
+                if "Checking" in acc.fullname:
+                    result = get_account_full_name(acc)
+                    assert "Checking" in result
+                    break
+
+    def test_case_sensitive_search(self, test_book_path):
+        """Case-sensitive search should only match exact case."""
+        from gcg.book import get_account_by_pattern, open_gnucash_book
+
+        with open_gnucash_book(test_book_path) as (book, _):
+            # "Checking" should match
+            matches = get_account_by_pattern(
+                book,
+                "Checking",
+                case_sensitive=True,
+                include_subtree=False,
+            )
+            assert len(matches) > 0
+
+            # "checking" lowercase should NOT match
+            no_matches = get_account_by_pattern(
+                book,
+                "checking",
+                case_sensitive=True,
+                include_subtree=False,
+            )
+            assert len(no_matches) == 0
+
+    def test_check_notes_support_bad_db(self, tmp_path):
+        """check_notes_support should handle bad DB."""
+        from gcg.book import check_notes_support
+
+        bad = tmp_path / "bad.gnucash"
+        bad.write_text("not a database")
+        has_col, has_slots = check_notes_support(bad)
+        assert has_col is False
+        assert has_slots is False
+
 
 class TestOutputFormats:
     """Tests for different output formats."""

@@ -54,6 +54,7 @@ class CurrencyConverter:
         self.base_currency = base_currency
         self.lookback_days = lookback_days
         self._price_cache: dict[tuple[str, str, date], Optional[Decimal]] = {}
+        self._conn: Optional[sqlite3.Connection] = None
 
     def get_price(
         self,
@@ -97,6 +98,22 @@ class CurrencyConverter:
         self._price_cache[cache_key] = rate
         return rate
 
+    def _get_conn(self) -> sqlite3.Connection:
+        """Get or create the database connection."""
+        if self._conn is None:
+            uri = f"file:{self.db_path}?mode=ro"
+            self._conn = sqlite3.connect(uri, uri=True)
+        return self._conn
+
+    def close(self):
+        """Close the database connection."""
+        if self._conn is not None:
+            self._conn.close()
+            self._conn = None
+
+    def __del__(self):
+        self.close()
+
     def _lookup_price(
         self,
         from_currency: str,
@@ -108,11 +125,10 @@ class CurrencyConverter:
 
         Tries both direct and inverse lookups.
         """
-        uri = f"file:{self.db_path}?mode=ro"
         earliest_date = on_date - timedelta(days=self.lookback_days)
 
         try:
-            conn = sqlite3.connect(uri, uri=True)
+            conn = self._get_conn()
             cursor = conn.cursor()
 
             # Try direct lookup: from_currency -> to_currency
@@ -121,8 +137,10 @@ class CurrencyConverter:
                 """
                 SELECT value_num, value_denom
                 FROM prices p
-                JOIN commodities c1 ON p.commodity_guid = c1.guid
-                JOIN commodities c2 ON p.currency_guid = c2.guid
+                JOIN commodities c1
+                    ON p.commodity_guid = c1.guid
+                JOIN commodities c2
+                    ON p.currency_guid = c2.guid
                 WHERE c1.mnemonic = ?
                   AND c2.mnemonic = ?
                   AND date(p.date) <= ?
@@ -141,17 +159,17 @@ class CurrencyConverter:
 
             if result:
                 num, denom = result
-                rate = Decimal(num) / Decimal(denom)
-                conn.close()
-                return rate
+                return Decimal(num) / Decimal(denom)
 
             # Try inverse lookup: to_currency -> from_currency
             cursor.execute(
                 """
                 SELECT value_num, value_denom
                 FROM prices p
-                JOIN commodities c1 ON p.commodity_guid = c1.guid
-                JOIN commodities c2 ON p.currency_guid = c2.guid
+                JOIN commodities c1
+                    ON p.commodity_guid = c1.guid
+                JOIN commodities c2
+                    ON p.currency_guid = c2.guid
                 WHERE c1.mnemonic = ?
                   AND c2.mnemonic = ?
                   AND date(p.date) <= ?
@@ -167,8 +185,6 @@ class CurrencyConverter:
                 ),
             )
             result = cursor.fetchone()
-
-            conn.close()
 
             if result:
                 num, denom = result
@@ -178,6 +194,7 @@ class CurrencyConverter:
             return None
 
         except sqlite3.Error:
+            self._conn = None
             return None
 
     def convert(

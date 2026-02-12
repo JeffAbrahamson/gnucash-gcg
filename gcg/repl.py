@@ -9,8 +9,8 @@ import re
 import readline
 import shlex
 import sys
-from datetime import date
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Optional
 
@@ -23,24 +23,19 @@ from gcg.book import (
     open_gnucash_book,
 )
 from gcg.config import Config, get_xdg_state_home
-from gcg.currency import (
-    CurrencyConverter,
-    determine_display_currency,
-    get_account_currencies,
-)
 from gcg.output import (
     AccountRow,
     OutputFormatter,
     SplitRow,
     TransactionRow,
 )
-
-
-def _account_name(fullname: str, full_account: bool) -> str:
-    """Return account name - full path or just final component."""
-    if full_account:
-        return fullname
-    return fullname.rsplit(":", 1)[-1]
+from gcg.shared import (
+    account_name as _account_name,
+    prune_to_matching_paths,
+    sort_rows,
+    splits_to_rows,
+    splits_to_transactions,
+)
 
 
 class ReplSession:
@@ -394,6 +389,7 @@ Options are the same as CLI. Example:
         parser.add_argument("--no-subtree", action="store_true")
         parser.add_argument("--after", type=str)
         parser.add_argument("--before", type=str)
+        parser.add_argument("--date", type=str, dest="date_range")
         parser.add_argument("--amount", type=str)
         parser.add_argument("--signed", action="store_true")
         parser.add_argument("--full-tx", action="store_true")
@@ -422,6 +418,27 @@ Options are the same as CLI. Example:
         # Parse dates
         after_date = None
         before_date = None
+        if parsed.date_range:
+            dr = parsed.date_range
+            if ".." not in dr:
+                print(
+                    f"Invalid date range: {dr}. "
+                    "Use format A..B, A.., or ..B",
+                    file=sys.stderr,
+                )
+                return
+            start_str, end_str = dr.split("..", 1)
+            try:
+                if start_str.strip():
+                    after_date = date.fromisoformat(start_str.strip())
+                if end_str.strip():
+                    # --date end is inclusive, add 1 day
+                    before_date = date.fromisoformat(
+                        end_str.strip()
+                    ) + timedelta(days=1)
+            except ValueError:
+                print(f"Invalid date range: {dr}", file=sys.stderr)
+                return
         if parsed.after:
             try:
                 after_date = date.fromisoformat(parsed.after)
@@ -440,10 +457,17 @@ Options are the same as CLI. Example:
         if parsed.amount:
             if ".." in parsed.amount:
                 parts = parsed.amount.split("..", 1)
-                if parts[0]:
-                    min_amt = Decimal(parts[0])
-                if parts[1]:
-                    max_amt = Decimal(parts[1])
+                try:
+                    if parts[0]:
+                        min_amt = Decimal(parts[0])
+                    if parts[1]:
+                        max_amt = Decimal(parts[1])
+                except InvalidOperation:
+                    print(
+                        f"Invalid amount: {parsed.amount}",
+                        file=sys.stderr,
+                    )
+                    return
 
         search_fields = set(parsed.search_fields.split(","))
 
@@ -589,6 +613,7 @@ Options are the same as CLI. Example:
         parser.add_argument("--no-subtree", action="store_true")
         parser.add_argument("--after", type=str)
         parser.add_argument("--before", type=str)
+        parser.add_argument("--date", type=str, dest="date_range")
         parser.add_argument("--amount", type=str)
         parser.add_argument("--signed", action="store_true")
         parser.add_argument("--no-header", action="store_true")
@@ -605,6 +630,27 @@ Options are the same as CLI. Example:
         # Parse dates
         after_date = None
         before_date = None
+        if parsed.date_range:
+            dr = parsed.date_range
+            if ".." not in dr:
+                print(
+                    f"Invalid date range: {dr}. "
+                    "Use format A..B, A.., or ..B",
+                    file=sys.stderr,
+                )
+                return
+            start_str, end_str = dr.split("..", 1)
+            try:
+                if start_str.strip():
+                    after_date = date.fromisoformat(start_str.strip())
+                if end_str.strip():
+                    # --date end is inclusive, add 1 day
+                    before_date = date.fromisoformat(
+                        end_str.strip()
+                    ) + timedelta(days=1)
+            except ValueError:
+                print(f"Invalid date range: {dr}", file=sys.stderr)
+                return
         if parsed.after:
             try:
                 after_date = date.fromisoformat(parsed.after)
@@ -623,10 +669,17 @@ Options are the same as CLI. Example:
         if parsed.amount:
             if ".." in parsed.amount:
                 parts = parsed.amount.split("..", 1)
-                if parts[0]:
-                    min_amt = Decimal(parts[0])
-                if parts[1]:
-                    max_amt = Decimal(parts[1])
+                try:
+                    if parts[0]:
+                        min_amt = Decimal(parts[0])
+                    if parts[1]:
+                        max_amt = Decimal(parts[1])
+                except InvalidOperation:
+                    print(
+                        f"Invalid amount: {parsed.amount}",
+                        file=sys.stderr,
+                    )
+                    return
 
         try:
             accounts = get_account_by_pattern(
@@ -796,85 +849,20 @@ Options are the same as CLI. Example:
         signed: bool,
     ) -> list[SplitRow]:
         """Convert split/tx/acc tuples to SplitRow objects."""
-        rows = []
-        converter = CurrencyConverter(
-            self.book_path,
+        return splits_to_rows(
+            splits_data,
+            db_path=self.book_path,
             base_currency=self.base_currency,
             lookback_days=self.config.fx_lookback_days,
+            currency_mode=self.currency_mode,
+            full_account=self.full_account,
+            signed=signed,
+            notes_map=notes_map,
         )
-        currency_mode = self.currency_mode
-
-        account_currencies = get_account_currencies(
-            [acc for _, _, acc in splits_data]
-        )
-        target_currency = determine_display_currency(
-            currency_mode,
-            [s for s, _, _ in splits_data],
-            account_currencies,
-            self.base_currency,
-        )
-
-        for split, tx, acc in splits_data:
-            split_value = Decimal(str(split.value))
-            if not signed:
-                split_value = abs(split_value)
-
-            split_currency = acc.commodity.mnemonic if acc.commodity else "???"
-            if target_currency and target_currency != split_currency:
-                result = converter.convert(
-                    split_value,
-                    split_currency,
-                    target_currency,
-                    tx.post_date,
-                )
-                display_amount = result.amount
-                display_currency = result.currency
-                fx_rate = result.fx_rate if result.converted else None
-            else:
-                display_amount = split_value
-                display_currency = split_currency
-                fx_rate = None
-            notes = notes_map.get(tx.guid)
-
-            row = SplitRow(
-                date=tx.post_date,
-                description=tx.description,
-                account=_account_name(acc.fullname, self.full_account),
-                memo=split.memo,
-                notes=notes,
-                amount=display_amount,
-                currency=display_currency,
-                fx_rate=fx_rate,
-                tx_guid=tx.guid,
-                split_guid=split.guid,
-            )
-            rows.append(row)
-        return rows
 
     def _prune_to_matching_paths(self, matching_accounts: list) -> list:
         """Prune account tree to show paths to matching accounts."""
-        matching_set = set(matching_accounts)
-        result_set = set(matching_accounts)
-
-        for acc in matching_accounts:
-            parent = acc.parent
-            while parent is not None:
-                if parent.type not in ("ROOT", "TRADING"):
-                    result_set.add(parent)
-                parent = parent.parent
-
-        all_accounts = [
-            a for a in self.book.accounts if a.type not in ("ROOT", "TRADING")
-        ]
-        for acc in all_accounts:
-            parent = acc.parent
-            while parent is not None:
-                if parent in matching_set:
-                    result_set.add(acc)
-                    break
-                parent = parent.parent
-
-        return list(result_set)
+        return prune_to_matching_paths(matching_accounts, self.book)
 
     def _splits_to_transactions(
         self,
@@ -883,74 +871,18 @@ Options are the same as CLI. Example:
         signed: bool,
     ) -> list[TransactionRow]:
         """Convert split data to TransactionRow objects."""
-        tx_map = {}
-        for split, tx, acc in splits_data:
-            if tx.guid not in tx_map:
-                tx_map[tx.guid] = {
-                    "tx": tx,
-                    "notes": notes_map.get(tx.guid),
-                    "splits": [],
-                }
-
-            for s in tx.splits:
-                split_acc = s.account
-                split_value = Decimal(str(s.value))
-                if not signed:
-                    split_value = abs(split_value)
-
-                tx_map[tx.guid]["splits"].append(
-                    SplitRow(
-                        date=tx.post_date,
-                        description=tx.description,
-                        account=_account_name(
-                            split_acc.fullname, self.full_account
-                        ),
-                        memo=s.memo,
-                        notes=tx_map[tx.guid]["notes"],
-                        amount=split_value,
-                        currency=(
-                            split_acc.commodity.mnemonic
-                            if split_acc.commodity
-                            else ""
-                        ),
-                        fx_rate=None,
-                        tx_guid=tx.guid,
-                        split_guid=s.guid,
-                    )
-                )
-
-        rows = []
-        for guid, data in tx_map.items():
-            seen = set()
-            unique_splits = []
-            for s in data["splits"]:
-                if s.split_guid not in seen:
-                    seen.add(s.split_guid)
-                    unique_splits.append(s)
-
-            rows.append(
-                TransactionRow(
-                    tx_guid=guid,
-                    date=data["tx"].post_date,
-                    description=data["tx"].description,
-                    notes=data["notes"],
-                    splits=unique_splits,
-                )
-            )
-        return rows
+        return splits_to_transactions(
+            splits_data,
+            notes_map=notes_map,
+            signed=signed,
+            full_account=self.full_account,
+        )
 
     def _sort_rows(
         self, rows: list[SplitRow], sort_key: str, reverse: bool
     ) -> list[SplitRow]:
         """Sort split rows by the specified key."""
-        key_map = {
-            "date": lambda r: r.date,
-            "amount": lambda r: r.amount,
-            "account": lambda r: r.account,
-            "description": lambda r: r.description,
-        }
-        key_fn = key_map.get(sort_key, key_map["date"])
-        return sorted(rows, key=key_fn, reverse=reverse)
+        return sort_rows(rows, sort_key, reverse)
 
 
 def run_repl(config: Config) -> int:

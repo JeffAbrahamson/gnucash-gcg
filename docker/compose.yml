@@ -5,6 +5,8 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: compile-for-dev
+      args:
+        SETUPTOOLS_SCM_PRETEND_VERSION: ${SETUPTOOLS_SCM_PRETEND_VERSION}
     image: gnucash-dev
     volumes:
       - ..:/devsrc

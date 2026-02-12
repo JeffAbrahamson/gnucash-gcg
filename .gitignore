@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Generated version file (setuptools-scm)
+gcg/_version.py
+
 # Distribution / packaging
 *.egg-info/
 *.egg

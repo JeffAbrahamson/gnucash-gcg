@@ -19,8 +19,8 @@ from sqlalchemy.exc import SAWarning
 
 warnings.filterwarnings("ignore", category=SAWarning)
 
-from piecash import open_book
-from piecash.core.book import Book
+from piecash import open_book  # noqa: E402
+from piecash.core.book import Book  # noqa: E402
 
 
 class BookOpenError(Exception):
@@ -58,26 +58,27 @@ def check_notes_support(db_path: Path) -> tuple[bool, bool]:
     """
     uri = f"file:{db_path}?mode=ro"
     try:
-        conn = sqlite3.connect(uri, uri=True)
-        cursor = conn.cursor()
+        with sqlite3.connect(uri, uri=True) as conn:
+            cursor = conn.cursor()
 
-        # Check for notes column in transactions table
-        cursor.execute("PRAGMA table_info(transactions)")
-        columns = {row[1] for row in cursor.fetchall()}
-        has_notes_column = "notes" in columns
+            # Check for notes column in transactions table
+            cursor.execute("PRAGMA table_info(transactions)")
+            columns = {row[1] for row in cursor.fetchall()}
+            has_notes_column = "notes" in columns
 
-        # Check for notes in slots (GnuCash stores tx notes as slots)
-        has_slots_notes = False
-        cursor.execute(
-            "SELECT COUNT(*) FROM slots WHERE name = 'notes' "
-            "AND obj_guid IN (SELECT guid FROM transactions) LIMIT 1"
-        )
-        result = cursor.fetchone()
-        if result and result[0] > 0:
-            has_slots_notes = True
+            # Check for notes in slots (GnuCash stores tx notes as slots)
+            has_slots_notes = False
+            cursor.execute(
+                "SELECT EXISTS(SELECT 1 FROM slots "
+                "WHERE name = 'notes' "
+                "AND obj_guid IN "
+                "(SELECT guid FROM transactions))"
+            )
+            result = cursor.fetchone()
+            if result and result[0]:
+                has_slots_notes = True
 
-        conn.close()
-        return (has_notes_column, has_slots_notes)
+            return (has_notes_column, has_slots_notes)
 
     except sqlite3.Error:
         return (False, False)
@@ -94,23 +95,23 @@ def get_transaction_notes(
     """
     uri = f"file:{db_path}?mode=ro"
     try:
-        conn = sqlite3.connect(uri, uri=True)
-        cursor = conn.cursor()
+        with sqlite3.connect(uri, uri=True) as conn:
+            cursor = conn.cursor()
 
-        if has_notes_column:
-            cursor.execute(
-                "SELECT notes FROM transactions WHERE guid = ?", (tx_guid,)
-            )
-        else:
-            cursor.execute(
-                "SELECT string_val FROM slots "
-                "WHERE obj_guid = ? AND name = 'notes'",
-                (tx_guid,),
-            )
+            if has_notes_column:
+                cursor.execute(
+                    "SELECT notes FROM transactions WHERE guid = ?",
+                    (tx_guid,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT string_val FROM slots "
+                    "WHERE obj_guid = ? AND name = 'notes'",
+                    (tx_guid,),
+                )
 
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else None
+            result = cursor.fetchone()
+            return result[0] if result else None
 
     except sqlite3.Error:
         return None
@@ -189,6 +190,20 @@ def open_gnucash_book(
 def get_account_full_name(account) -> str:
     """Get the full hierarchical name of an account."""
     return account.fullname
+
+
+def get_transaction_by_guid(book: Book, guid: str):
+    """Look up a transaction by GUID using indexed query."""
+    from piecash import Transaction
+
+    return book.session.query(Transaction).filter_by(guid=guid).first()
+
+
+def get_split_by_guid(book: Book, guid: str):
+    """Look up a split by GUID using indexed query."""
+    from piecash import Split
+
+    return book.session.query(Split).filter_by(guid=guid).first()
 
 
 def get_account_by_pattern(
@@ -275,31 +290,30 @@ def get_transaction_notes_batch(
     result = {}
 
     try:
-        conn = sqlite3.connect(uri, uri=True)
-        cursor = conn.cursor()
+        with sqlite3.connect(uri, uri=True) as conn:
+            cursor = conn.cursor()
 
-        # Build placeholders for IN clause
-        placeholders = ",".join("?" * len(tx_guids))
+            # Build placeholders for IN clause
+            placeholders = ",".join("?" * len(tx_guids))
 
-        if has_notes_column:
-            cursor.execute(
-                f"SELECT guid, notes FROM transactions "
-                f"WHERE guid IN ({placeholders})",
-                tx_guids,
-            )
-        else:
-            cursor.execute(
-                f"SELECT obj_guid, string_val FROM slots "
-                f"WHERE obj_guid IN ({placeholders}) AND name = 'notes'",
-                tx_guids,
-            )
+            if has_notes_column:
+                cursor.execute(
+                    f"SELECT guid, notes FROM transactions "
+                    f"WHERE guid IN ({placeholders})",
+                    tx_guids,
+                )
+            else:
+                cursor.execute(
+                    f"SELECT obj_guid, string_val FROM slots "
+                    f"WHERE obj_guid IN ({placeholders}) "
+                    f"AND name = 'notes'",
+                    tx_guids,
+                )
 
-        for row in cursor.fetchall():
-            guid, notes = row
-            if notes:
-                result[guid] = notes
-
-        conn.close()
+            for row in cursor.fetchall():
+                guid, notes = row
+                if notes:
+                    result[guid] = notes
 
     except sqlite3.Error:
         pass

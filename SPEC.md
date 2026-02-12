@@ -5,7 +5,7 @@
 - **Pipeline-friendly** (stable identifiers, CSV/JSON output, grep-like exit codes).
 - **Safe** (never writes to the GnuCash book; opens SQLite read-only).
 
-Primary implementation language: **Python**. Preferred library: **piekash** for book opening and object mapping, with **direct SQL** (or a sidecar cache) for high-throughput searches.
+Primary implementation language: **Python**. Preferred library: **piecash** for book opening and object mapping, with **direct SQL** (or a sidecar cache) for high-throughput searches.
 
 ---
 
@@ -49,7 +49,7 @@ Default path is:
 
 ### Override precedence
 1. `--book PATH`
-2. `GCG_BOOK` environment variable
+2. `GCG_DEFAULT_BOOK_PATH` environment variable
 3. XDG config file: `${XDG_CONFIG_HOME:-$HOME/.config}/gcg/config.toml`
 4. built-in default above
 
@@ -362,7 +362,7 @@ gcg accounts --regex '^Expenses:.*(Food|Restaurant)' --tree --tree-prune
 Grep:
 ```
 gcg grep "amazon" --after 2025-01-01 --before 2026-01-01
-gcg grep -i "tesco" --full-tx --dedupe tx
+gcg grep "tesco" --full-tx --dedupe tx
 gcg grep --regex '(assurance|mutuelle)' --amount 10..200 --currency base --also-original
 ```
 
