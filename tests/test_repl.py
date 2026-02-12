@@ -848,3 +848,74 @@ class TestLedgerExtended:
         session_with_book.cmd_ledger(["[bad", "--account-regex"])
         err = capsys.readouterr().err
         assert "Error" in err
+
+
+# ===================================================================
+# Argparse error paths (SystemExit from bad args)
+# ===================================================================
+
+
+class TestArgparseErrors:
+    def test_accounts_bad_args(self, session_with_book, capsys):
+        """Bad args to accounts should not crash."""
+        session_with_book.cmd_accounts(["--unknown-flag"])
+        # SystemExit is caught, no crash
+
+    def test_grep_bad_args(self, session_with_book, capsys):
+        """Bad args to grep should not crash."""
+        session_with_book.cmd_grep(["--unknown-flag"])
+        # SystemExit is caught, no crash
+
+    def test_ledger_bad_args(self, session_with_book, capsys):
+        """Bad args to ledger should not crash."""
+        session_with_book.cmd_ledger(["--unknown-flag"])
+        # SystemExit is caught, no crash
+
+
+# ===================================================================
+# Grep: account_set filter and amount skip branches
+# ===================================================================
+
+
+class TestGrepAccountSetFilter:
+    def test_grep_account_filter_skips_non_matching(
+        self, session_with_book, capsys
+    ):
+        """grep with --account should skip splits from other accounts."""
+        session_with_book.output_format = "json"
+        session_with_book.cmd_grep(
+            ["", "--regex", "--account", "Groceries", "--no-subtree"]
+        )
+        out = capsys.readouterr().out
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert "Groceries" in row["account"]
+
+    def test_grep_amount_min_skip(self, session_with_book, capsys):
+        """grep with min amount should skip small amounts."""
+        session_with_book.output_format = "json"
+        session_with_book.cmd_grep(["", "--regex", "--amount", "1000.."])
+        out = capsys.readouterr().out
+        # Only salary (3500) should match
+        import json
+
+        data = json.loads(out)
+        for row in data:
+            assert Decimal(row["amount"]) >= 1000
+
+    def test_grep_offset_skip(self, session_with_book, capsys):
+        """grep with --offset should skip rows."""
+        session_with_book.output_format = "json"
+        # Get all results first
+        session_with_book.cmd_grep(["", "--regex"])
+        all_out = capsys.readouterr().out
+        import json
+
+        all_data = json.loads(all_out)
+        # Now with offset
+        session_with_book.cmd_grep(["", "--regex", "--offset", "2"])
+        offset_out = capsys.readouterr().out
+        offset_data = json.loads(offset_out)
+        assert len(offset_data) == len(all_data) - 2
