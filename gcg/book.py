@@ -69,11 +69,11 @@ def check_notes_support(db_path: Path) -> tuple[bool, bool]:
         # Check for notes in slots (GnuCash stores tx notes as slots)
         has_slots_notes = False
         cursor.execute(
-            "SELECT COUNT(*) FROM slots WHERE name = 'notes' "
-            "AND obj_guid IN (SELECT guid FROM transactions) LIMIT 1"
+            "SELECT EXISTS(SELECT 1 FROM slots WHERE name = 'notes' "
+            "AND obj_guid IN (SELECT guid FROM transactions))"
         )
         result = cursor.fetchone()
-        if result and result[0] > 0:
+        if result and result[0]:
             has_slots_notes = True
 
         conn.close()

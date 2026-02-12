@@ -179,7 +179,7 @@ book.py:73 — `SELECT COUNT(*) ... LIMIT 1` is redundant; `COUNT(*)`
 always returns one row. Use `SELECT EXISTS(...)` instead.
 
 Action: Fix.
-Status: Pending
+Status: Done
 
 ### Clean up `hasattr`/`getattr` pattern for subparser attributes
 cli.py uses `getattr(args, "full_account", False)` and
