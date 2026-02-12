@@ -192,6 +192,20 @@ def get_account_full_name(account) -> str:
     return account.fullname
 
 
+def get_transaction_by_guid(book: Book, guid: str):
+    """Look up a transaction by GUID using indexed query."""
+    from piecash import Transaction
+
+    return book.session.query(Transaction).filter_by(guid=guid).first()
+
+
+def get_split_by_guid(book: Book, guid: str):
+    """Look up a split by GUID using indexed query."""
+    from piecash import Split
+
+    return book.session.query(Split).filter_by(guid=guid).first()
+
+
 def get_account_by_pattern(
     book: Book,
     pattern: str,

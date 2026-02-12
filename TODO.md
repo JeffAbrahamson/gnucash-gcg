@@ -165,7 +165,7 @@ splits. Direct `SELECT ... WHERE guid = ?` would be faster for large
 books.
 
 Action: Fix.
-Status: Pending
+Status: Done
 
 ### Hold currency converter connection open
 `_lookup_price` opens and closes a connection on every call. Holding one

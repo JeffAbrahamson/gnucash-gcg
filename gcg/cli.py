@@ -17,6 +17,8 @@ from gcg.book import (
     BookOpenError,
     InvalidPatternError,
     get_account_by_pattern,
+    get_split_by_guid,
+    get_transaction_by_guid,
     get_transaction_notes,
     get_transaction_notes_batch,
     open_gnucash_book,
@@ -761,11 +763,7 @@ def cmd_tx(args, config: Config) -> int:
     """Handle the tx command - show transaction by GUID."""
     try:
         with open_gnucash_book(config.resolve_book_path()) as (book, info):
-            tx = None
-            for t in book.transactions:
-                if t.guid == args.guid:
-                    tx = t
-                    break
+            tx = get_transaction_by_guid(book, args.guid)
 
             if tx is None:
                 print(f"Transaction not found: {args.guid}", file=sys.stderr)
@@ -822,43 +820,31 @@ def cmd_split(args, config: Config) -> int:
     """Handle the split command - show split by GUID."""
     try:
         with open_gnucash_book(config.resolve_book_path()) as (book, info):
-            found_split = None
-            found_tx = None
-            found_acc = None
-
-            for acc in book.accounts:
-                for split in acc.splits:
-                    if split.guid == args.guid:
-                        found_split = split
-                        found_tx = split.transaction
-                        found_acc = acc
-                        break
-                if found_split:
-                    break
+            found_split = get_split_by_guid(book, args.guid)
 
             if found_split is None:
                 print(f"Split not found: {args.guid}", file=sys.stderr)
                 return 1
 
+            tx = found_split.transaction
+            acc = found_split.account
             notes = get_transaction_notes(
                 config.resolve_book_path(),
-                found_tx.guid,
+                tx.guid,
                 info.has_notes_column,
             )
 
             full_account = args.full_account
             row = SplitRow(
-                date=found_tx.post_date,
-                description=found_tx.description,
-                account=_account_name(found_acc.fullname, full_account),
+                date=tx.post_date,
+                description=tx.description,
+                account=_account_name(acc.fullname, full_account),
                 memo=found_split.memo,
                 notes=notes,
                 amount=Decimal(str(found_split.value)),
-                currency=(
-                    found_acc.commodity.mnemonic if found_acc.commodity else ""
-                ),
+                currency=(acc.commodity.mnemonic if acc.commodity else ""),
                 fx_rate=None,
-                tx_guid=found_tx.guid,
+                tx_guid=tx.guid,
                 split_guid=found_split.guid,
             )
 
