@@ -172,7 +172,7 @@ Status: Pending
 open for the converter's lifetime would reduce overhead.
 
 Action: Fix.
-Status: Pending
+Status: Done
 
 ### Fix `check_notes_support` ineffective `LIMIT 1`
 book.py:73 — `SELECT COUNT(*) ... LIMIT 1` is redundant; `COUNT(*)`
